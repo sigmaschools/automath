@@ -2,7 +2,7 @@
 
 A minimal, research-backed math practice app for K-5 students to develop automaticity in basic arithmetic through adaptive, low-pressure daily warmups.
 
-**[Try it now →](https://claude-test-monkey.github.io/automath/)**
+**[Try it now →](https://sigmaschools.github.io/automath/)**
 
 ![Automath Screenshot](https://img.shields.io/badge/Grade-K--5-blue) ![No Dependencies](https://img.shields.io/badge/dependencies-none-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
@@ -94,7 +94,7 @@ Automaticity is the foundation of mathematical fluency.
 
 ### Use Online
 
-Visit **[https://claude-test-monkey.github.io/automath/](https://claude-test-monkey.github.io/automath/)** in any modern browser.
+Visit **[https://sigmaschools.github.io/automath/](https://sigmaschools.github.io/automath/)** in any modern browser.
 
 ### Use Offline
 
@@ -106,7 +106,7 @@ Visit **[https://claude-test-monkey.github.io/automath/](https://claude-test-mon
 
 ```bash
 # Clone the repository
-git clone https://github.com/claude-test-monkey/automath.git
+git clone https://github.com/sigmaschools/automath.git
 
 # Open in browser
 open automath.html
@@ -161,7 +161,7 @@ MIT License - feel free to use, modify, and distribute.
 
 ## Support
 
-Questions or feedback? [Open an issue](https://github.com/claude-test-monkey/automath/issues) on GitHub.
+Questions or feedback? [Open an issue](https://github.com/sigmaschools/automath/issues) on GitHub.
 
 ---
 

@@ -102,7 +102,7 @@ cp automath.html index.html
 git add automath.html index.html
 git commit -m "Your change description"
 git push
-# Wait 1-2 minutes, then check: https://claude-test-monkey.github.io/automath/
+# Wait 1-2 minutes, then check: https://sigmaschools.github.io/automath/
 ```
 
 ### Modifying Difficulty Levels
