@@ -526,13 +526,22 @@ Automath implements the core principles in a simplified, single-session context 
 
 ### Decision 12: Run a List of Operations When Compass Asks (3 November 2026)
 
-**Decision**: When the page is opened with `?compass_parts=addition,subtraction,multiplication,division` (any subset, in any order), Automath skips the operation picker and runs those operations one after another, 15 problems each. Between operations a calm screen says which one is done and how many are left, with one button to start the next (it takes Enter after a 0.6 s pause, so the Enter that answered the last problem cannot skip it). After the last one, the results screen covers the whole run and "Practice Again" is hidden. Each finished operation leaves a `<script type="application/json" data-compass-report>` block in the page: `kind: "part"`, the operation, `correct`, `wrong`, `seconds`, and every problem with the learner's answer, the right answer and the response time in ms. Opened without the parameter, Automath works exactly as before (it also leaves a report, which no one reads outside Compass).
+**Decision**: When the page is opened with `?compass_parts=addition,subtraction,multiplication,division` (any subset, in any order), Automath skips the operation picker and runs those operations one after another, 15 problems each. Between operations a calm screen says which one is done and how many are left, with one button to start the next (it takes Enter after a 0.6 s pause, so the Enter that answered the last problem cannot skip it). After the last one, the results screen covers the whole run and "Practice Again" is hidden (superseded by Decision 13: one score per operation). Each finished operation leaves a `<script type="application/json" data-compass-report>` block in the page: `kind: "part"`, the operation, `correct`, `wrong`, `seconds`, and every problem with the learner's answer, the right answer and the response time in ms. Opened without the parameter, Automath works exactly as before (it also leaves a report, which no one reads outside Compass).
 
 **Why**: Compass runs Automath as a once-a-day warm-up before the main math app, and the warm-up counts only when all four operations are done; a student who stops partway resumes later with only the missing operations. Compass therefore has to tell Automath which operations to run and learn each one as it finishes. The per-problem response times are the first data for telling when a student's facts are automatic (accuracy alone cannot show that), which is when the warm-up could switch off for that student.
 
 **Alternatives considered**: four separate Compass steps, one per operation (four hand-off screens and four app loads, and Automath has no way to be told the operation); mixing all four operations in one 60-problem set (changes the learning design; a later decision if wanted).
 
 **Contract**: the parameter and report follow the Compass app contract (`compass/APP-CONTRACT.md` in the Compass repository, version 0.1). Keep both working through any rewrite of Automath.
+
+### Decision 13: One Score per Operation, Shown as Each One Finishes (3 November 2026)
+
+**Decision**: In a Compass run, the screen between operations shows that operation's own score, accuracy and time, above a "Start Subtraction" button, with that operation's problems reviewed below the button. The final screen does the same for the last operation, then a table with one row per operation finished in this visit (score, accuracy, time). The run is no longer summed into one score or one list of every problem. Outside Compass nothing changes. What Compass records was already per operation (one `part` report each, Decision 12).
+
+**Why**: Each operation is its own exercise with its own result, and the learner should see that result right after doing the work, while it still means something. A learner who stops after two operations has already seen both scores. The four operations are also not equally hard, so one combined score hides the operation that needs practice.
+
+**Alternatives considered**: all four scores only at the end (feedback comes up to three exercises late, and a learner who stops early never sees it); one combined score (the old behaviour, which hides which operation is weak).
+Decided with the product owner on 3 November 2026.
 
 ## Lessons Learned
 
