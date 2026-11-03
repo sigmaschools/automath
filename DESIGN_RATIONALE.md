@@ -543,6 +543,14 @@ Automath implements the core principles in a simplified, single-session context 
 **Alternatives considered**: all four scores only at the end (feedback comes up to three exercises late, and a learner who stops early never sees it); one combined score (the old behaviour, which hides which operation is weak).
 Decided with the product owner on 3 November 2026.
 
+### Decision 14: A Clear Way Forward, Where-Am-I Pills and Colored Results (3 November 2026)
+
+**Decision**: Three changes from the product owner's first full morning in Compass. (1) Between operations, the one control is a large blue "Next: Subtraction →" button straight under the score, with "or press Enter" beneath it; it used to be a plain black button below the "N more to go" line. (2) In a Compass run of two or more operations, every screen starts with "Exercise 2 of 4" over one pill per operation in this visit: finished ones green with a tick, the current one blue, the rest outlined. (3) Score, accuracy and time each have their own color (blue, teal, violet), on the big numbers, their labels and the matching columns of the summary table. Each `part` report also carries `index` (1-based) and `of` (operations in this visit). App version 1.2.0.
+
+**Why**: The tester could not see where to click to go on: a black button on a white page with black text reads as more text. The learner should never have to hunt for the way forward. Knowing how many exercises are left makes a fixed-length warm-up predictable, which lowers anxiety for the same reason the fixed problem count does. The pills sit above the problem, small and grey except for the current one, so they do not pull attention from the problem (the reason a progress bar was left out in Lesson 1). On the results screens all-black numbers ran together; one color per measure lets the eye find each value and match it to the table.
+
+**Alternatives considered**: auto-advancing to the next operation after a few seconds (takes the pause and the review away from the learner); a progress bar (draws the eye during practice, Lesson 1); green for accuracy (reads as "good" even when accuracy is low, so a neutral teal is used). `of` counts this visit only: a resumed warm-up that runs the two missing operations shows "1 of 2"; the whole day's count is Compass's to show, since only Compass knows what was done earlier.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

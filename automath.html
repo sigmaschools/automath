@@ -319,10 +319,104 @@
         .summary-table tr.current {
             font-weight: 500;
         }
+
+        /* Each number on a score screen has its own color, so the three values
+           read apart at a glance. The same colors mark the summary columns. */
+        .result-item.score .result-value, .summary-table td.score { color: #2563eb; }
+        .result-item.accuracy .result-value, .summary-table td.accuracy { color: #0f766e; }
+        .result-item.time .result-value, .summary-table td.time { color: #7c3aed; }
+        .result-item.score .result-label { color: #2563eb; }
+        .result-item.accuracy .result-label { color: #0f766e; }
+        .result-item.time .result-label { color: #7c3aed; }
+        .result-item .result-label { font-weight: 600; }
+
+        /* Compass runs: where the learner is among this visit's exercises. */
+        .steps {
+            margin-bottom: 24px;
+        }
+
+        .steps-text {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666666;
+            margin-bottom: 10px;
+        }
+
+        .steps-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .step {
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid #d4d4d4;
+            color: #737373;
+            background: #ffffff;
+        }
+
+        .step.done {
+            border-color: #22c55e;
+            background: #e8f5e9;
+            color: #15803d;
+        }
+
+        .step.current {
+            border-color: #2563eb;
+            background: #2563eb;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        /* The one way forward between exercises: big, colored and right under
+           the title, so nobody has to hunt for it. */
+        #nextPartBtn {
+            display: block;
+            margin: 32px auto 8px auto;
+            background: #2563eb;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 600;
+            padding: 22px 56px;
+            border-radius: 12px;
+            min-width: 280px;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+        }
+
+        #nextPartBtn:hover {
+            background: #1d4ed8;
+            opacity: 1;
+        }
+
+        #nextPartBtn:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        #nextPartBtn:focus-visible {
+            outline: 3px solid #93c5fd;
+            outline-offset: 3px;
+        }
+
+        .next-hint {
+            font-size: 14px;
+            color: #737373;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Compass runs: "Exercise 2 of 4" and one pill per exercise -->
+        <div class="steps hidden" id="steps" aria-live="polite">
+            <div class="steps-text" id="stepsText"></div>
+            <div class="steps-row" id="stepsRow"></div>
+        </div>
+
         <!-- Start Screen -->
         <div id="startScreen" class="screen active">
             <h1>Automath</h1>
@@ -363,8 +457,9 @@
         <div id="partScreen" class="screen">
             <h2 id="partDoneTitle">Done</h2>
             <div class="results" id="partScore"></div>
-            <div class="part-left" id="partLeft"></div>
             <button id="nextPartBtn">Next</button>
+            <div class="next-hint">or press Enter</div>
+            <div class="part-left" id="partLeft"></div>
             <div class="review-section">
                 <div class="review-title">Review Your Work</div>
                 <table class="review-table">
@@ -385,17 +480,17 @@
             <h2 id="resultsTitle">Complete</h2>
 
             <div class="results" id="resultsScore">
-                <div class="result-item">
+                <div class="result-item score">
                     <div class="result-label">Score</div>
                     <div class="result-value" id="scoreResult">0/10</div>
                 </div>
 
-                <div class="result-item">
+                <div class="result-item accuracy">
                     <div class="result-label">Accuracy</div>
                     <div class="result-value" id="accuracyResult">0%</div>
                 </div>
 
-                <div class="result-item">
+                <div class="result-item time">
                     <div class="result-label">Time</div>
                     <div class="result-value" id="timeResult">0:00</div>
                 </div>
@@ -439,7 +534,7 @@
         // operations to run in order, with no picker; each finished operation is
         // reported in a data-compass-report block; the results screen comes after
         // the last one. Without the parameter the app works exactly as before.
-        const APP_VERSION = '1.1.0';
+        const APP_VERSION = '1.2.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const compassParts = (() => {
@@ -694,6 +789,7 @@
             answerInput.classList.remove('correct', 'incorrect');
             answerInput.focus();
             const partLabel = compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
+            renderSteps(false);
             progressEl.textContent = `${partLabel}Problem ${currentProblem + 1} of ${totalProblems}`;
             problemShownAt = Date.now();
         }
@@ -779,6 +875,8 @@
             const report = {
                 kind: 'part',
                 part: selectedOperation,
+                index: compassParts ? partIndex + 1 : 1,
+                of: compassParts ? compassParts.length : 1,
                 status: 'finished',
                 correct: correctAnswers,
                 wrong: totalProblems - correctAnswers,
@@ -807,8 +905,9 @@
             document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
             renderScore(document.getElementById('partScore'), part.correct, part.total, part.seconds);
             renderReview(document.getElementById('partReviewBody'), sessionHistory);
+            renderSteps(true);
             document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
-            nextPartBtn.textContent = `Start ${left[0]}`;
+            nextPartBtn.textContent = `Next: ${left[0]} →`;
             // A beat before the button takes Enter, so the Enter that answered the
             // last problem cannot also skip this screen.
             nextPartBtn.disabled = true;
@@ -824,6 +923,39 @@
             selectedOperation = compassParts[partIndex];
             partScreen.classList.remove('active');
             startPractice();
+        }
+
+        // Compass runs: "Exercise 2 of 4" over one pill per exercise in this
+        // visit; finished ones are green with a tick, the current one is blue.
+        // `justFinished` is true on the screens after an exercise, where the
+        // current one is already done.
+        function renderSteps(justFinished) {
+            const steps = document.getElementById('steps');
+            if (!compassParts || compassParts.length < 2) {
+                steps.classList.add('hidden');
+                return;
+            }
+            const finished = justFinished ? partIndex + 1 : partIndex;
+            document.getElementById('stepsText').textContent = finished >= compassParts.length
+                ? `All ${compassParts.length} exercises done`
+                : justFinished
+                    ? `${finished} of ${compassParts.length} exercises done`
+                    : `Exercise ${partIndex + 1} of ${compassParts.length}`;
+            const row = document.getElementById('stepsRow');
+            row.innerHTML = '';
+            compassParts.forEach((p, i) => {
+                const pill = document.createElement('span');
+                pill.className = 'step';
+                if (i < finished) {
+                    pill.classList.add('done');
+                    pill.textContent = `${OPERATION_NAMES[p]} ✓`;
+                } else {
+                    if (i === partIndex) pill.classList.add('current');
+                    pill.textContent = OPERATION_NAMES[p];
+                }
+                row.appendChild(pill);
+            });
+            steps.classList.remove('hidden');
         }
 
         function formatTime(elapsed) {
@@ -842,7 +974,7 @@
             [['Score', `${correct}/${total}`], ['Accuracy', `${accuracyOf(correct, total)}%`], ['Time', formatTime(elapsed)]]
                 .forEach(([label, value]) => {
                     const item = document.createElement('div');
-                    item.className = 'result-item';
+                    item.className = `result-item ${label.toLowerCase()}`;
                     const l = document.createElement('div');
                     l.className = 'result-label';
                     l.textContent = label;
@@ -894,7 +1026,7 @@
                 [OPERATION_NAMES[part.operation], `${part.correct}/${part.total}`,
                     `${accuracyOf(part.correct, part.total)}%`, formatTime(part.seconds)].forEach((text, col) => {
                     const cell = document.createElement('td');
-                    if (col === 0) cell.className = 'problem-col';
+                    cell.className = ['problem-col', 'score', 'accuracy', 'time'][col];
                     cell.textContent = text;
                     row.appendChild(cell);
                 });
@@ -916,6 +1048,7 @@
                 document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
                 renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
                 renderSummary();
+                renderSteps(true);
             } else {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 renderScore(document.getElementById('resultsScore'), correctAnswers, totalProblems, elapsed);

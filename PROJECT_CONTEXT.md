@@ -325,6 +325,7 @@ Managed via CSS classes (no routing library):
 - ✅ Direct-to-practice flow (no intermediate screens)
 - ✅ GitHub Pages deployment
 - ✅ Compass mode: `?compass_parts=` runs a list of operations in order and reports each finished one to Compass (see Decision 12 in DESIGN_RATIONALE.md)
+- ✅ Compass mode shows "Exercise N of M" pills, a large blue Next button between operations and colored score values (Decision 14)
 
 ### Known Limitations 🔄
 - No progress tracking across sessions (always starts at Level 1)
@@ -457,6 +458,8 @@ Managed via CSS classes (no routing library):
 - [ ] Horizontal results layout (Score, Accuracy, Time) wraps on mobile
 - [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 15 problems a "Subtraction done ✓" screen with Subtraction's own score, accuracy and time, "One more to go", "Start Division" and Subtraction's 15 problems; Division; the results screen shows Division's own score and 15 problems, a two-row table (Subtraction, Division) and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
 - [ ] Unknown names in `compass_parts` are ignored; an empty or all-unknown list gives the normal picker
+- [ ] Compass run of 2+ operations: "Exercise N of M" and one pill per operation above every screen (finished green ✓, current blue); between operations a large blue "Next: <operation> →" button under the score that takes Enter after 0.6 s; Score, Accuracy and Time in blue, teal and violet, matching the summary columns; each `part` report has `index` and `of`
+- [ ] Without `compass_parts`, or with only one operation, no pills appear
 
 ---
 
