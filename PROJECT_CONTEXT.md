@@ -455,7 +455,7 @@ Managed via CSS classes (no routing library):
 - [ ] Input field auto-focuses after each problem
 - [ ] Enter key submits answers
 - [ ] Horizontal results layout (Score, Accuracy, Time) wraps on mobile
-- [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 15 problems a "Subtraction done ✓ / One more to go / Start Division" screen; Division; results show 30 problems and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
+- [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 15 problems a "Subtraction done ✓" screen with Subtraction's own score, accuracy and time, "One more to go", "Start Division" and Subtraction's 15 problems; Division; the results screen shows Division's own score and 15 problems, a two-row table (Subtraction, Division) and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
 - [ ] Unknown names in `compass_parts` are ignored; an empty or all-unknown list gives the normal picker
 
 ---

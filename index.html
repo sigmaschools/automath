@@ -308,7 +308,16 @@
         .part-left {
             font-size: 18px;
             color: #666666;
-            margin-bottom: 40px;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        .summary-table {
+            margin-top: 30px;
+        }
+
+        .summary-table tr.current {
+            font-weight: 500;
         }
     </style>
 </head>
@@ -353,15 +362,29 @@
         <!-- Between parts (only when Compass chose the operations) -->
         <div id="partScreen" class="screen">
             <h2 id="partDoneTitle">Done</h2>
+            <div class="results" id="partScore"></div>
             <div class="part-left" id="partLeft"></div>
             <button id="nextPartBtn">Next</button>
+            <div class="review-section">
+                <div class="review-title">Review Your Work</div>
+                <table class="review-table">
+                    <thead>
+                        <tr>
+                            <th class="problem-col">Problem</th>
+                            <th>Your Answer</th>
+                            <th>Correct Answer</th>
+                        </tr>
+                    </thead>
+                    <tbody id="partReviewBody"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Results Screen -->
         <div id="resultsScreen" class="screen">
-            <h2>Complete</h2>
+            <h2 id="resultsTitle">Complete</h2>
 
-            <div class="results">
+            <div class="results" id="resultsScore">
                 <div class="result-item">
                     <div class="result-label">Score</div>
                     <div class="result-value" id="scoreResult">0/10</div>
@@ -377,6 +400,19 @@
                     <div class="result-value" id="timeResult">0:00</div>
                 </div>
             </div>
+
+            <!-- Compass runs: one row per operation in this visit -->
+            <table class="review-table summary-table hidden" id="summaryTable">
+                <thead>
+                    <tr>
+                        <th class="problem-col">Exercise</th>
+                        <th>Score</th>
+                        <th>Accuracy</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryTableBody"></tbody>
+            </table>
 
             <button id="restartBtn" style="margin-top: 40px; margin-bottom: 0;">Practice Again</button>
 
@@ -417,8 +453,7 @@
             }
         })();
         let partIndex = 0;
-        let runHistory = []; // every operation's problems, for the final review
-        let runStartTime = null;
+        let runParts = []; // one score per finished operation in this visit
         let problemShownAt = null;
 
         // State
@@ -529,9 +564,9 @@
                         num1 = Math.floor(Math.random() * 8) + 3;
                         num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
                     } else if (difficultyLevel === 3) {
-                        // Facts within 20
+                        // Facts within 20, never below zero
                         num1 = Math.floor(Math.random() * 15) + 6;
-                        num2 = Math.floor(Math.random() * 10) + 1;
+                        num2 = Math.floor(Math.random() * Math.min(10, num1 - 1)) + 1;
                     } else {
                         // Level 4: Two-digit within 75
                         num1 = Math.floor(Math.random() * 50) + 20;
@@ -727,7 +762,12 @@
         // next listed operation or to the results.
         function finishPart() {
             reportPart();
-            runHistory = runHistory.concat(sessionHistory);
+            runParts.push({
+                operation: selectedOperation,
+                correct: correctAnswers,
+                total: totalProblems,
+                seconds: Math.round((Date.now() - startTime) / 1000)
+            });
             if (compassParts && partIndex < compassParts.length - 1) {
                 showPartScreen();
             } else {
@@ -763,7 +803,10 @@
             practiceScreen.classList.remove('active');
             partScreen.classList.add('active');
             const left = compassParts.slice(partIndex + 1).map(p => OPERATION_NAMES[p]);
+            const part = runParts[runParts.length - 1];
             document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
+            renderScore(document.getElementById('partScore'), part.correct, part.total, part.seconds);
+            renderReview(document.getElementById('partReviewBody'), sessionHistory);
             document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
             nextPartBtn.textContent = `Start ${left[0]}`;
             // A beat before the button takes Enter, so the Enter that answered the
@@ -783,47 +826,50 @@
             startPractice();
         }
 
-        function showResults() {
-            practiceScreen.classList.remove('active');
-            resultsScreen.classList.add('active');
-
-            // In Compass mode the results cover every operation in the run.
-            const history = compassParts ? runHistory : sessionHistory;
-            const total = history.length;
-            const correctTotal = history.filter(item => item.isCorrect).length;
-            const elapsed = Math.floor((Date.now() - (compassParts ? runStartTime : startTime)) / 1000);
+        function formatTime(elapsed) {
             const minutes = Math.floor(elapsed / 60);
             const seconds = elapsed % 60;
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
 
-            const accuracy = total > 0 ? Math.round((correctTotal / total) * 100) : 0;
-            if (compassParts) {
-                restartBtn.classList.add('hidden');
-            }
+        function accuracyOf(correct, total) {
+            return total > 0 ? Math.round((correct / total) * 100) : 0;
+        }
 
-            document.getElementById('scoreResult').textContent = `${correctTotal}/${total}`;
-            document.getElementById('accuracyResult').textContent = `${accuracy}%`;
-            document.getElementById('timeResult').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        // The score, accuracy and time of one exercise, as three big numbers.
+        function renderScore(container, correct, total, elapsed) {
+            container.innerHTML = '';
+            [['Score', `${correct}/${total}`], ['Accuracy', `${accuracyOf(correct, total)}%`], ['Time', formatTime(elapsed)]]
+                .forEach(([label, value]) => {
+                    const item = document.createElement('div');
+                    item.className = 'result-item';
+                    const l = document.createElement('div');
+                    l.className = 'result-label';
+                    l.textContent = label;
+                    const v = document.createElement('div');
+                    v.className = 'result-value';
+                    v.textContent = value;
+                    item.append(l, v);
+                    container.appendChild(item);
+                });
+        }
 
-            // Populate review table
-            const reviewTableBody = document.getElementById('reviewTableBody');
-            reviewTableBody.innerHTML = '';
-
-            history.forEach((item, index) => {
+        // Every problem of one exercise: the learner's answer, and the right one where it was wrong.
+        function renderReview(tbody, history) {
+            tbody.innerHTML = '';
+            history.forEach(item => {
                 const row = document.createElement('tr');
                 row.className = item.isCorrect ? 'correct' : 'incorrect';
 
-                // Problem column
                 const problemCell = document.createElement('td');
                 problemCell.className = 'problem-col';
                 problemCell.textContent = `${item.num1} ${item.operator} ${item.num2} =`;
                 row.appendChild(problemCell);
 
-                // Your Answer column
                 const answerCell = document.createElement('td');
                 answerCell.textContent = item.userAnswer;
                 row.appendChild(answerCell);
 
-                // Correct Answer column
                 const correctCell = document.createElement('td');
                 if (item.isCorrect) {
                     correctCell.innerHTML = '<span class="feedback-icon">✓</span>';
@@ -833,8 +879,48 @@
                 }
                 row.appendChild(correctCell);
 
-                reviewTableBody.appendChild(row);
+                tbody.appendChild(row);
             });
+        }
+
+        // One row per operation finished in this visit; the last one is the
+        // exercise just finished.
+        function renderSummary() {
+            const tbody = document.getElementById('summaryTableBody');
+            tbody.innerHTML = '';
+            runParts.forEach((part, i) => {
+                const row = document.createElement('tr');
+                if (i === runParts.length - 1) row.className = 'current';
+                [OPERATION_NAMES[part.operation], `${part.correct}/${part.total}`,
+                    `${accuracyOf(part.correct, part.total)}%`, formatTime(part.seconds)].forEach((text, col) => {
+                    const cell = document.createElement('td');
+                    if (col === 0) cell.className = 'problem-col';
+                    cell.textContent = text;
+                    row.appendChild(cell);
+                });
+                tbody.appendChild(row);
+            });
+            document.getElementById('summaryTable').classList.remove('hidden');
+        }
+
+        function showResults() {
+            practiceScreen.classList.remove('active');
+            resultsScreen.classList.add('active');
+
+            // Every screen shows the exercise just finished: its own score and its
+            // own problems. In Compass mode a table of every exercise in this
+            // visit follows, one score per operation.
+            const part = runParts[runParts.length - 1];
+            if (compassParts) {
+                restartBtn.classList.add('hidden');
+                document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
+                renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
+                renderSummary();
+            } else {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                renderScore(document.getElementById('resultsScore'), correctAnswers, totalProblems, elapsed);
+            }
+            renderReview(document.getElementById('reviewTableBody'), sessionHistory);
         }
 
         function resetApp() {
@@ -851,13 +937,12 @@
             totalTrivialCount = 0;
             recentOperands = [];
             sessionHistory = [];
-            runHistory = [];
+            runParts = [];
         }
 
         // Compass chose the operations: skip the picker and start the first one.
         if (compassParts) {
             selectedOperation = compassParts[0];
-            runStartTime = Date.now();
             startPractice();
         }
     </script>
