@@ -524,6 +524,16 @@ Automath implements the core principles in a simplified, single-session context 
 
 ---
 
+### Decision 12: Run a List of Operations When Compass Asks (3 November 2026)
+
+**Decision**: When the page is opened with `?compass_parts=addition,subtraction,multiplication,division` (any subset, in any order), Automath skips the operation picker and runs those operations one after another, 15 problems each. Between operations a calm screen says which one is done and how many are left, with one button to start the next (it takes Enter after a 0.6 s pause, so the Enter that answered the last problem cannot skip it). After the last one, the results screen covers the whole run and "Practice Again" is hidden. Each finished operation leaves a `<script type="application/json" data-compass-report>` block in the page: `kind: "part"`, the operation, `correct`, `wrong`, `seconds`, and every problem with the learner's answer, the right answer and the response time in ms. Opened without the parameter, Automath works exactly as before (it also leaves a report, which no one reads outside Compass).
+
+**Why**: Compass runs Automath as a once-a-day warm-up before the main math app, and the warm-up counts only when all four operations are done; a student who stops partway resumes later with only the missing operations. Compass therefore has to tell Automath which operations to run and learn each one as it finishes. The per-problem response times are the first data for telling when a student's facts are automatic (accuracy alone cannot show that), which is when the warm-up could switch off for that student.
+
+**Alternatives considered**: four separate Compass steps, one per operation (four hand-off screens and four app loads, and Automath has no way to be told the operation); mixing all four operations in one 60-problem set (changes the learning design; a later decision if wanted).
+
+**Contract**: the parameter and report follow the Compass app contract (`compass/APP-CONTRACT.md` in the Compass repository, version 0.1). Keep both working through any rewrite of Automath.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

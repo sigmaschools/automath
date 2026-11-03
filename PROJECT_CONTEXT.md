@@ -324,10 +324,11 @@ Managed via CSS classes (no routing library):
 - ✅ Responsive design (works on iPad and desktop)
 - ✅ Direct-to-practice flow (no intermediate screens)
 - ✅ GitHub Pages deployment
+- ✅ Compass mode: `?compass_parts=` runs a list of operations in order and reports each finished one to Compass (see Decision 12 in DESIGN_RATIONALE.md)
 
 ### Known Limitations 🔄
 - No progress tracking across sessions (always starts at Level 1)
-- No mixed operation mode (must select single operation)
+- No mixed operation mode (one operation at a time; Compass mode runs several one after another)
 - No keyboard shortcuts for operation selection
 - No accessibility labels (screen reader support)
 - No sound feedback
@@ -454,6 +455,8 @@ Managed via CSS classes (no routing library):
 - [ ] Input field auto-focuses after each problem
 - [ ] Enter key submits answers
 - [ ] Horizontal results layout (Score, Accuracy, Time) wraps on mobile
+- [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 15 problems a "Subtraction done ✓ / One more to go / Start Division" screen; Division; results show 30 problems and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
+- [ ] Unknown names in `compass_parts` are ignored; an empty or all-unknown list gives the normal picker
 
 ---
 
