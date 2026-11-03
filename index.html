@@ -304,6 +304,12 @@
         .hidden {
             display: none;
         }
+
+        .part-left {
+            font-size: 18px;
+            color: #666666;
+            margin-bottom: 40px;
+        }
     </style>
 </head>
 <body>
@@ -342,6 +348,13 @@
             </div>
 
             <div class="progress" id="progress">Problem 1 of 15</div>
+        </div>
+
+        <!-- Between parts (only when Compass chose the operations) -->
+        <div id="partScreen" class="screen">
+            <h2 id="partDoneTitle">Done</h2>
+            <div class="part-left" id="partLeft"></div>
+            <button id="nextPartBtn">Next</button>
         </div>
 
         <!-- Results Screen -->
@@ -386,6 +399,28 @@
     </div>
 
     <script>
+        // Compass support (app contract 0.1): `compass_parts` in the URL lists the
+        // operations to run in order, with no picker; each finished operation is
+        // reported in a data-compass-report block; the results screen comes after
+        // the last one. Without the parameter the app works exactly as before.
+        const APP_VERSION = '1.1.0';
+        const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
+        const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
+        const compassParts = (() => {
+            try {
+                const value = new URLSearchParams(window.location.search).get('compass_parts');
+                if (!value) return null;
+                const parts = [...new Set(value.split(',').map(p => p.trim().toLowerCase()).filter(p => OPERATIONS.includes(p)))];
+                return parts.length > 0 ? parts : null;
+            } catch (e) {
+                return null;
+            }
+        })();
+        let partIndex = 0;
+        let runHistory = []; // every operation's problems, for the final review
+        let runStartTime = null;
+        let problemShownAt = null;
+
         // State
         let selectedOperation = null;
         let currentProblem = 0;
@@ -423,6 +458,10 @@
         });
 
         restartBtn.addEventListener('click', resetApp);
+
+        const partScreen = document.getElementById('partScreen');
+        const nextPartBtn = document.getElementById('nextPartBtn');
+        nextPartBtn.addEventListener('click', startNextPart);
 
         // Helper function: Check if problem is trivial
         function isTrivial(num1, num2, operation) {
@@ -619,7 +658,9 @@
             answerInput.placeholder = '?';
             answerInput.classList.remove('correct', 'incorrect');
             answerInput.focus();
-            progressEl.textContent = `Problem ${currentProblem + 1} of ${totalProblems}`;
+            const partLabel = compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
+            progressEl.textContent = `${partLabel}Problem ${currentProblem + 1} of ${totalProblems}`;
+            problemShownAt = Date.now();
         }
 
         answerInput.addEventListener('keypress', (e) => {
@@ -642,7 +683,8 @@
                 operator: currentProblemData.operator,
                 correctAnswer: currentProblemData.answer,
                 userAnswer: userAnswer,
-                isCorrect: isCorrect
+                isCorrect: isCorrect,
+                ms: problemShownAt ? Date.now() - problemShownAt : null
             });
 
             if (isCorrect) {
@@ -676,22 +718,89 @@
                 if (currentProblem < totalProblems) {
                     showNextProblem();
                 } else {
-                    showResults();
+                    finishPart();
                 }
             }, 400);
+        }
+
+        // One operation's 15 problems are done: tell Compass, then go on to the
+        // next listed operation or to the results.
+        function finishPart() {
+            reportPart();
+            runHistory = runHistory.concat(sessionHistory);
+            if (compassParts && partIndex < compassParts.length - 1) {
+                showPartScreen();
+            } else {
+                showResults();
+            }
+        }
+
+        function reportPart() {
+            const report = {
+                kind: 'part',
+                part: selectedOperation,
+                status: 'finished',
+                correct: correctAnswers,
+                wrong: totalProblems - correctAnswers,
+                seconds: Math.round((Date.now() - startTime) / 1000),
+                items: sessionHistory.map(item => ({
+                    prompt: `${item.num1} ${item.operator} ${item.num2}`,
+                    answer: item.userAnswer,
+                    correctAnswer: item.correctAnswer,
+                    correct: item.isCorrect,
+                    ms: item.ms
+                })),
+                appVersion: APP_VERSION
+            };
+            const block = document.createElement('script');
+            block.type = 'application/json';
+            block.setAttribute('data-compass-report', '');
+            block.textContent = JSON.stringify(report);
+            document.body.appendChild(block);
+        }
+
+        function showPartScreen() {
+            practiceScreen.classList.remove('active');
+            partScreen.classList.add('active');
+            const left = compassParts.slice(partIndex + 1).map(p => OPERATION_NAMES[p]);
+            document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
+            document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
+            nextPartBtn.textContent = `Start ${left[0]}`;
+            // A beat before the button takes Enter, so the Enter that answered the
+            // last problem cannot also skip this screen.
+            nextPartBtn.disabled = true;
+            setTimeout(() => {
+                nextPartBtn.disabled = false;
+                nextPartBtn.focus();
+            }, 600);
+        }
+
+        function startNextPart() {
+            if (!compassParts || partIndex >= compassParts.length - 1) return;
+            partIndex++;
+            selectedOperation = compassParts[partIndex];
+            partScreen.classList.remove('active');
+            startPractice();
         }
 
         function showResults() {
             practiceScreen.classList.remove('active');
             resultsScreen.classList.add('active');
 
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            // In Compass mode the results cover every operation in the run.
+            const history = compassParts ? runHistory : sessionHistory;
+            const total = history.length;
+            const correctTotal = history.filter(item => item.isCorrect).length;
+            const elapsed = Math.floor((Date.now() - (compassParts ? runStartTime : startTime)) / 1000);
             const minutes = Math.floor(elapsed / 60);
             const seconds = elapsed % 60;
 
-            const accuracy = Math.round((correctAnswers / totalProblems) * 100);
+            const accuracy = total > 0 ? Math.round((correctTotal / total) * 100) : 0;
+            if (compassParts) {
+                restartBtn.classList.add('hidden');
+            }
 
-            document.getElementById('scoreResult').textContent = `${correctAnswers}/${totalProblems}`;
+            document.getElementById('scoreResult').textContent = `${correctTotal}/${total}`;
             document.getElementById('accuracyResult').textContent = `${accuracy}%`;
             document.getElementById('timeResult').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
@@ -699,7 +808,7 @@
             const reviewTableBody = document.getElementById('reviewTableBody');
             reviewTableBody.innerHTML = '';
 
-            sessionHistory.forEach((item, index) => {
+            history.forEach((item, index) => {
                 const row = document.createElement('tr');
                 row.className = item.isCorrect ? 'correct' : 'incorrect';
 
@@ -742,6 +851,14 @@
             totalTrivialCount = 0;
             recentOperands = [];
             sessionHistory = [];
+            runHistory = [];
+        }
+
+        // Compass chose the operations: skip the picker and start the first one.
+        if (compassParts) {
+            selectedOperation = compassParts[0];
+            runStartTime = Date.now();
+            startPractice();
         }
     </script>
 </body>
