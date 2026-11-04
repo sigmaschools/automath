@@ -127,7 +127,7 @@ python3 -m http.server 8000
 Future enhancements under consideration:
 
 - [ ] LocalStorage progress tracking (remember difficulty across sessions)
-- [ ] Mixed practice mode (interleave all operations)
+- [x] Mixed practice mode (Compass runs, alternate days); still to do on the stand-alone picker
 - [ ] Visual progress indicator
 - [ ] Keyboard shortcuts for operation selection
 - [ ] Accessibility improvements (ARIA labels, screen reader support)
