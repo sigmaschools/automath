@@ -206,12 +206,15 @@
 
 ### Problem Generation Algorithm
 
-Problems are generated dynamically based on current difficulty level and operation type:
+Each level lists every problem it can give; the next problem is picked from that list (Decision 17):
 
 ```javascript
-function generateProblem(operation, difficultyLevel) {
-    // Generates random problem within difficulty constraints
-    // Returns: { num1, num2, operator, answer }
+function problemsAt(operation, level) {
+    // Every problem in the level's range, cached
+    // Returns: [{ num1, num2, operator, answer }, ...]
+}
+function pickProblem(operation, level) {
+    // An unseen problem, preferring ones that keep the quality rules
 }
 ```
 
@@ -450,7 +453,7 @@ Managed via CSS classes (no routing library):
 - [ ] No duplicate problems in a session (including commutative duplicates)
 - [ ] Trivial problems limited (max 1 consecutive, max 3 total)
 - [ ] No excessive operand clustering (same number in 3+ consecutive problems)
-- [ ] Difficulty progression works correctly (3 correct → level up)
+- [ ] Difficulty progression works correctly (2 correct → level up; 3 to re-enter a level slipped out of)
 - [ ] Difficulty regression works (1 wrong → level down)
 - [ ] In-box feedback displays correctly (green ✓ or red ✗ with colored borders)
 - [ ] Cursor disappears during feedback display
@@ -479,20 +482,17 @@ Managed via CSS classes (no routing library):
 - Clear separation of concerns within single file
 
 **Key Functions**:
-- `generateProblem()`: Creates random problem at specified difficulty
+- `problemsAt()` / `pickProblem()`: List a level's problems / pick an unseen one
 - `showNextProblem()`: Displays problem with quality validation
 - `checkAnswer()`: Evaluates answer, updates difficulty, saves to history
 - `showResults()`: Displays summary stats and populates review table
 - Helper functions: `isTrivial()`, `isDuplicate()`, `normalizeProblem()`, `hasRecentOperand()`
 
 ### Modifying Difficulty Levels
-To adjust difficulty ranges, edit the `generateProblem()` function (lines 287-375):
+To adjust difficulty ranges, edit the `problemsAt()` function:
 ```javascript
-// Example: Making Level 1 easier (facts within 3 instead of 5)
-if (difficultyLevel === 1) {
-    num1 = Math.floor(Math.random() * 3) + 1;
-    num2 = Math.floor(Math.random() * (3 - num1)) + 1;
-}
+// Example: Making Level 1 addition easier (facts within 3 instead of 5)
+if (level === 1) pairs(1, 2, 1, a => 3 - a, plus);
 ```
 
 ### Changing Session Length
@@ -507,10 +507,11 @@ Also update HTML placeholder (line 209):
 ```
 
 ### Adjusting Difficulty Progression Speed
-Modify streak requirement in `checkAnswer()` function (line 416):
+Modify the streak requirement in `checkAnswer()`:
 ```javascript
-// Require 3 consecutive correct answers to level up
-if (correctStreak >= 3 && currentDifficulty < 4) {
+// 2 correct in a row to level up, 3 to re-enter a level slipped out of
+const needed = droppedFrom.includes(currentDifficulty + 1) ? 3 : 2;
+if (correctStreak >= needed && currentDifficulty < 4) {
 ```
 
 ---
