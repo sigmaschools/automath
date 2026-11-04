@@ -207,6 +207,8 @@ Automath implements the core principles in a simplified, single-session context 
 
 **Outcome**: Students spend more time at appropriate difficulty level, better for automaticity development.
 
+*Superseded by Decision 17: 2 correct in a row to advance (3 to re-enter a level already slipped out of).*
+
 ---
 
 ### Decision 4: Remove On-Screen Timer
@@ -439,6 +441,8 @@ Automath implements the core principles in a simplified, single-session context 
 
 **Outcome**: Higher quality practice sessions with no wasted problems.
 
+*Revised by Decision 17: the retry loop could keep a duplicate when no draw passed every rule; problems are now picked from each level's full list, and repeats are never allowed while an unseen problem is left.*
+
 ---
 
 ### Decision 11: Review Table on Results Screen
@@ -568,6 +572,18 @@ Decided with the product owner on 3 November 2026.
 **Alternatives considered**: Compass choosing the mode through a new launch parameter (needs a shell build and a plan field for a rule the app can apply alone; possible later if a guide should choose); alternating by session instead of by day (two visits on one day would differ); fully random operation per problem (uneven counts per operation); weighting towards weak operations (open question 4, option C; needs the per-operation fluency data first). Expect mixed days to score a little lower than grouped days: interleaving is harder in the moment while helping retention, so compare mixed days with mixed days.
 
 **Known limit**: all operations of a mixed set finish in its last round, so a learner who stops partway through a mixed set has finished no operation and does the whole set again on the next visit that day (Compass then launches the same parts, still mixed on that day).
+
+### Decision 17: No Repeats, Faster Climb, Fireworks (4 November 2026)
+
+**Decision**: Three changes from the product owner's testing. (1) A session never repeats a problem (7 × 2 and 2 × 7 still count as one) while an unused problem is left anywhere in reach. Each level now lists every problem it can give; the next problem is drawn from the unseen ones at the learner's level, preferring those that keep the soft rules of Decision 10 (trivial limits, no number from the last two problems). If a level runs out, an unseen problem comes from the nearest level, one up first. (2) The learner moves up a level after 2 correct in a row instead of 3, except that climbing back into a level they slipped out of earlier in the same exercise takes 3. Any wrong answer still drops one level. (3) When an exercise's accuracy is above 85% (13/15 or better; 52/60 or better for a mixed set), a few seconds of square-spark fireworks go off over its score screen. They use the app's own colors, make no sound, let clicks through, stop when the learner moves on, and do not run at all when the device asks for reduced motion. App version 1.4.0.
+
+**Why (repeats)**: the old generator drew at random and retried up to 50 times; when no draw passed every rule it kept the last draw, duplicate or not. Levels 1 and 2 are tiny (addition within 5 has 6 distinct facts; the only non-trivial level-1 multiplication fact is ×2, and the "no recent number" rule then blocks every ×2 problem right after one), so that fallback fired constantly, most of all after a wrong answer sent the learner back down. Simulated with the old code, about half of 15-problem exercises and over 90% of 60-problem mixed sets had a repeat; a weaker learner saw about 15 repeats per mixed set. With the new picker: none, and the soft rules hold far more often too (more than 3 trivial problems in 31% of exercises before, under 1% now). Repeats are a hard rule; the soft rules give way first.
+
+**Why (2 up, 1 down, 3 to go back)**: every exercise starts at level 1, so with 3 to advance a strong learner spends 9 of 15 problems climbing. With 2 it takes 6, and a strong learner's average level rises from about 2.6 to 3.0. The cost is that a learner who reaches the edge of their ability settles where they get fewer right: a "2 up, 1 down" staircase settles where the learner is right about 71% of the time (0.71² = 0.5), against 79% for "3 up, 1 down". Requiring 3 to re-enter a level already slipped out of keeps the fast first climb but stops a learner bouncing in and out of a level that is too hard today; in simulation it recovers about half the accuracy given up (a typical learner: 89% with 3-up, 84% with plain 2-up, 85% with this rule). Softening the drop (for example, dropping only after 2 misses in a row) was rejected: it makes the settling point harder, not easier (it settles near 50%), and a wrong answer making the next problem easier is part of the low-anxiety design (Lessons Learned 2).
+
+**Why (fireworks)**: a clear, earned celebration for an exercise done well, in the spirit of an end-of-level fireworks burst. It appears only on the score screen, after practice, so it cannot distract from a problem, and it adds no pressure during practice. This is a deliberate exception to "no animations" (Minimal UI Design).
+
+**Alternatives considered**: pre-generating the whole session (Decision 10's option 2; the per-problem picker keeps adaptive difficulty simple); allowing a missed fact to come back later in the session (useful retrieval practice, but the product owner asked for no repeats); fireworks at 80% (12/15 would earn them, which makes them less special).
 
 ## Lessons Learned
 

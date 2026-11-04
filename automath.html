@@ -365,6 +365,16 @@
             color: #737373;
             margin-bottom: 10px;
         }
+
+        /* Fireworks over a score above 85% (Decision 17). Clicks pass through. */
+        #fireworks {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -481,13 +491,15 @@
         </div>
     </div>
 
+    <canvas id="fireworks" hidden></canvas>
+
     <script>
         // Compass support (app contract 0.1): `compass_parts` in the URL lists the
         // operations to run, with no picker; each finished operation is reported
         // in a data-compass-report block; the results screen comes after the last
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
-        const APP_VERSION = '1.3.0';
+        const APP_VERSION = '1.4.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const compassParts = (() => {
@@ -531,6 +543,7 @@
         let currentDifficulty = 1; // Start at easiest level (1-4)
         let currentProblemData = null;
         let correctStreak = 0; // Track consecutive correct answers
+        let droppedFrom = []; // Levels the learner slipped out of this exercise
 
         // Problem tracking to prevent duplicates and manage trivial problems
         let sessionProblems = []; // All problems shown this session
@@ -595,94 +608,86 @@
             return recentOperands.includes(num1) || recentOperands.includes(num2);
         }
 
-        function generateProblem(operation, difficultyLevel) {
-            let num1, num2, answer;
-
-            switch(operation) {
-                case 'addition':
-                    if (difficultyLevel === 1) {
-                        // Facts within 5
-                        num1 = Math.floor(Math.random() * 5) + 1;
-                        num2 = Math.floor(Math.random() * (5 - num1)) + 1;
-                    } else if (difficultyLevel === 2) {
-                        // Facts within 10
-                        num1 = Math.floor(Math.random() * 9) + 1;
-                        num2 = Math.floor(Math.random() * (10 - num1)) + 1;
-                    } else if (difficultyLevel === 3) {
-                        // Facts within 20
-                        num1 = Math.floor(Math.random() * 15) + 5;
-                        num2 = Math.floor(Math.random() * 10) + 1;
-                    } else {
-                        // Level 4: Two-digit within 75
-                        num1 = Math.floor(Math.random() * 40) + 10;
-                        num2 = Math.floor(Math.random() * 30) + 5;
+        // Every problem a level can give, listed once. Picking from the list
+        // (rather than drawing at random and retrying) means a session never
+        // repeats a problem while an unused one is left anywhere in reach.
+        const poolCache = {};
+        function problemsAt(operation, level) {
+            const key = `${operation}${level}`;
+            if (poolCache[key]) return poolCache[key];
+            const list = [];
+            const add = (num1, num2, operator, answer) => list.push({ num1, num2, operator, answer });
+            const pairs = (aFrom, aTo, bFrom, bTo, make) => {
+                for (let a = aFrom; a <= aTo; a++) {
+                    for (let b = bFrom; b <= (typeof bTo === 'function' ? bTo(a) : bTo); b++) {
+                        make(a, b);
                     }
-                    answer = num1 + num2;
-                    return { num1, num2, operator: '+', answer };
-
-                case 'subtraction':
-                    if (difficultyLevel === 1) {
-                        // Facts within 5
-                        num1 = Math.floor(Math.random() * 4) + 2;
-                        num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
-                    } else if (difficultyLevel === 2) {
-                        // Facts within 10
-                        num1 = Math.floor(Math.random() * 8) + 3;
-                        num2 = Math.floor(Math.random() * (num1 - 1)) + 1;
-                    } else if (difficultyLevel === 3) {
-                        // Facts within 20, never below zero
-                        num1 = Math.floor(Math.random() * 15) + 6;
-                        num2 = Math.floor(Math.random() * Math.min(10, num1 - 1)) + 1;
-                    } else {
-                        // Level 4: Two-digit within 75
-                        num1 = Math.floor(Math.random() * 50) + 20;
-                        num2 = Math.floor(Math.random() * 30) + 5;
-                    }
-                    answer = num1 - num2;
-                    return { num1, num2, operator: '−', answer };
-
-                case 'multiplication':
-                    if (difficultyLevel === 1) {
-                        // 0-2 times tables
-                        num1 = Math.floor(Math.random() * 10) + 1;
-                        num2 = Math.floor(Math.random() * 3);
-                    } else if (difficultyLevel === 2) {
-                        // 0-5 times tables
-                        num1 = Math.floor(Math.random() * 10) + 1;
-                        num2 = Math.floor(Math.random() * 6);
-                    } else if (difficultyLevel === 3) {
-                        // 0-10 times tables
-                        num1 = Math.floor(Math.random() * 10) + 1;
-                        num2 = Math.floor(Math.random() * 11);
-                    } else {
-                        // Level 4: 0-12 times tables
-                        num1 = Math.floor(Math.random() * 12) + 1;
-                        num2 = Math.floor(Math.random() * 13);
-                    }
-                    answer = num1 * num2;
-                    return { num1, num2, operator: '×', answer };
-
-                case 'division':
-                    if (difficultyLevel === 1) {
-                        // 0-2 times tables division
-                        num2 = Math.floor(Math.random() * 2) + 1;
-                        answer = Math.floor(Math.random() * 10) + 1;
-                    } else if (difficultyLevel === 2) {
-                        // 0-5 times tables division
-                        num2 = Math.floor(Math.random() * 5) + 1;
-                        answer = Math.floor(Math.random() * 10) + 1;
-                    } else if (difficultyLevel === 3) {
-                        // 0-10 times tables division
-                        num2 = Math.floor(Math.random() * 9) + 2;
-                        answer = Math.floor(Math.random() * 12) + 1;
-                    } else {
-                        // Level 4: 0-12 times tables division
-                        num2 = Math.floor(Math.random() * 11) + 2;
-                        answer = Math.floor(Math.random() * 12) + 1;
-                    }
-                    num1 = num2 * answer;
-                    return { num1, num2, operator: '÷', answer };
+                }
+            };
+            switch (operation) {
+                case 'addition': {
+                    const plus = (a, b) => add(a, b, '+', a + b);
+                    if (level === 1) pairs(1, 4, 1, a => 5 - a, plus);        // facts within 5
+                    else if (level === 2) pairs(1, 9, 1, a => 10 - a, plus);  // facts within 10
+                    else if (level === 3) pairs(5, 19, 1, 10, plus);          // facts within 20
+                    else pairs(10, 49, 5, 34, plus);                          // two-digit, within 75
+                    break;
+                }
+                case 'subtraction': {
+                    const minus = (a, b) => add(a, b, '−', a - b);
+                    if (level === 1) pairs(2, 5, 1, a => a - 1, minus);                     // within 5
+                    else if (level === 2) pairs(3, 10, 1, a => a - 1, minus);               // within 10
+                    else if (level === 3) pairs(6, 20, 1, a => Math.min(10, a - 1), minus); // within 20
+                    else pairs(20, 69, 5, 34, minus);                                       // two-digit
+                    break;
+                }
+                case 'multiplication': {
+                    const times = (a, b) => add(a, b, '×', a * b);
+                    const [aTo, bTo] = [[10, 2], [10, 5], [10, 10], [12, 12]][level - 1];
+                    pairs(1, aTo, 0, bTo, times);
+                    break;
+                }
+                case 'division': {
+                    const over = (b, q) => add(b * q, b, '÷', q);
+                    const [bFrom, bTo, qTo] = [[1, 2, 10], [1, 5, 10], [2, 10, 12], [2, 12, 12]][level - 1];
+                    pairs(bFrom, bTo, 1, qTo, over);
+                    break;
+                }
             }
+            poolCache[key] = list;
+            return list;
+        }
+
+        // The next problem: never one already seen this session (7 × 2 and
+        // 2 × 7 count as the same). Among unseen problems at the learner's
+        // level, prefer one that keeps the soft rules (no back-to-back trivial
+        // problems, at most 3 trivial ones, no number from the last two
+        // problems). If every problem at this level has been seen, take an
+        // unseen one from the nearest level (one up first, then one down).
+        function pickProblem(operation, level) {
+            const order = [level, level + 1, level - 1, level + 2, level - 2, level + 3, level - 3]
+                .filter(l => l >= 1 && l <= 4);
+            for (const l of order) {
+                const unseen = problemsAt(operation, l).filter(p => !isDuplicate(p.num1, p.num2, p.operator));
+                if (unseen.length === 0) continue;
+                let best = [];
+                let bestCost = Infinity;
+                unseen.forEach(p => {
+                    const trivial = isTrivial(p.num1, p.num2, operation);
+                    const cost = (trivial && (consecutiveTrivialCount >= 1 || totalTrivialCount >= 3) ? 2 : 0)
+                        + (hasRecentOperand(p.num1, p.num2) ? 1 : 0);
+                    if (cost < bestCost) {
+                        bestCost = cost;
+                        best = [];
+                    }
+                    if (cost === bestCost) best.push(p);
+                });
+                return best[Math.floor(Math.random() * best.length)];
+            }
+            // Every problem of this operation has been seen (cannot happen in
+            // 15 problems, but never get stuck): repeat one at this level.
+            const pool = problemsAt(operation, level);
+            return pool[Math.floor(Math.random() * pool.length)];
         }
 
         function startPractice() {
@@ -690,6 +695,7 @@
             correctAnswers = 0;
             currentDifficulty = 1; // Start at easiest level
             correctStreak = 0;
+            droppedFrom = [];
 
             // Reset problem tracking
             sessionProblems = [];
@@ -730,7 +736,7 @@
             mixedQueue = buildMixedQueue(compassParts);
             opState = {};
             compassParts.forEach(op => {
-                opState[op] = { difficulty: 1, streak: 0, consecutiveTrivial: 0, totalTrivial: 0, recentOperands: [], answered: 0, correct: 0, ms: 0 };
+                opState[op] = { difficulty: 1, streak: 0, droppedFrom: [], consecutiveTrivial: 0, totalTrivial: 0, recentOperands: [], answered: 0, correct: 0, ms: 0 };
             });
             currentProblem = 0;
             correctAnswers = 0;
@@ -749,6 +755,7 @@
             const s = opState[op];
             currentDifficulty = s.difficulty;
             correctStreak = s.streak;
+            droppedFrom = s.droppedFrom;
             consecutiveTrivialCount = s.consecutiveTrivial;
             totalTrivialCount = s.totalTrivial;
             recentOperands = s.recentOperands;
@@ -758,6 +765,7 @@
             const s = opState[op];
             s.difficulty = currentDifficulty;
             s.streak = correctStreak;
+            s.droppedFrom = droppedFrom;
             s.consecutiveTrivial = consecutiveTrivialCount;
             s.totalTrivial = totalTrivialCount;
             s.recentOperands = recentOperands;
@@ -772,51 +780,18 @@
                 selectedOperation = mixedQueue[currentProblem];
                 loadOpState(selectedOperation);
             }
-            let problem = null;
-            let attempts = 0;
-            const maxAttempts = 50;
-
-            // Retry logic to generate valid problem
-            while (attempts < maxAttempts) {
-                problem = generateProblem(selectedOperation, currentDifficulty);
-                const { num1, num2, operator } = problem;
-
-                // Check if problem is trivial
-                const trivial = isTrivial(num1, num2, selectedOperation);
-
-                // Validation checks
-                const duplicate = isDuplicate(num1, num2, operator);
-                const tooManyConsecutiveTrivial = trivial && consecutiveTrivialCount >= 1;
-                const tooManyTotalTrivial = trivial && totalTrivialCount >= 3;
-                const sameOperandClustering = hasRecentOperand(num1, num2);
-
-                // Accept if all checks pass
-                if (!duplicate && !tooManyConsecutiveTrivial && !tooManyTotalTrivial && !sameOperandClustering) {
-                    // Track this problem
-                    const normalized = normalizeProblem(num1, num2, operator);
-                    sessionProblems.push(normalized);
-
-                    // Update trivial tracking
-                    if (trivial) {
-                        consecutiveTrivialCount++;
-                        totalTrivialCount++;
-                    } else {
-                        consecutiveTrivialCount = 0;
-                    }
-
-                    // Update recent operands (keep last 2)
-                    recentOperands.push(num1, num2);
-                    if (recentOperands.length > 4) {
-                        recentOperands = recentOperands.slice(-4);
-                    }
-
-                    break;
-                }
-
-                attempts++;
+            const problem = pickProblem(selectedOperation, currentDifficulty);
+            const { num1, num2, operator } = problem;
+            sessionProblems.push(normalizeProblem(num1, num2, operator));
+            if (isTrivial(num1, num2, selectedOperation)) {
+                consecutiveTrivialCount++;
+                totalTrivialCount++;
+            } else {
+                consecutiveTrivialCount = 0;
             }
+            // Remember the numbers of the last two problems
+            recentOperands = [...recentOperands, num1, num2].slice(-4);
 
-            // Use the generated problem (or last attempt if max retries reached)
             currentProblemData = problem;
             problemNum1El.textContent = currentProblemData.num1;
             problemOpEl.textContent = currentProblemData.operator;
@@ -864,8 +839,11 @@
                 correctAnswers++;
                 correctStreak++;
 
-                // Increase difficulty only after 3 consecutive correct answers (max 4)
-                if (correctStreak >= 3 && currentDifficulty < 4) {
+                // Up a level after 2 correct in a row (max 4). Going back up into
+                // a level the learner slipped out of this exercise takes 3, so a
+                // learner on the edge of a level does not bounce in and out of it.
+                const needed = droppedFrom.includes(currentDifficulty + 1) ? 3 : 2;
+                if (correctStreak >= needed && currentDifficulty < 4) {
                     currentDifficulty++;
                     correctStreak = 0; // Reset streak after difficulty increase
                 }
@@ -878,6 +856,7 @@
 
                 // Decrease difficulty immediately on wrong answer (min 1)
                 if (currentDifficulty > 1) {
+                    if (!droppedFrom.includes(currentDifficulty)) droppedFrom.push(currentDifficulty);
                     currentDifficulty--;
                 }
             }
@@ -975,6 +954,7 @@
             const part = runParts[runParts.length - 1];
             document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
             renderScore(document.getElementById('partScore'), part.correct, part.total, part.seconds);
+            celebrateIfEarned(part.correct, part.total);
             renderReview(document.getElementById('partReviewBody'), sessionHistory);
             document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
             nextPartBtn.textContent = `Next: ${left[0]} →`;
@@ -989,6 +969,7 @@
 
         function startNextPart() {
             if (!compassParts || partIndex >= compassParts.length - 1) return;
+            stopFireworks();
             partIndex++;
             selectedOperation = compassParts[partIndex];
             partScreen.classList.remove('active');
@@ -1087,27 +1068,142 @@
                 document.getElementById('resultsTitle').textContent = 'Mixed practice done ✓';
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 renderScore(document.getElementById('resultsScore'), correctAnswers, problemsInRun(), elapsed);
+                celebrateIfEarned(correctAnswers, problemsInRun());
                 runParts.sort((a, b) => compassParts.indexOf(a.operation) - compassParts.indexOf(b.operation));
                 renderSummary(false);
             } else if (compassParts) {
                 restartBtn.classList.add('hidden');
                 document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
                 renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
+                celebrateIfEarned(part.correct, part.total);
                 renderSummary();
-                } else {
+            } else {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 renderScore(document.getElementById('resultsScore'), correctAnswers, totalProblems, elapsed);
+                celebrateIfEarned(correctAnswers, totalProblems);
             }
             renderReview(document.getElementById('reviewTableBody'), sessionHistory);
         }
 
+        // A short burst of fireworks over the score when accuracy is above 85%:
+        // a handful of rockets climb from the bottom, each pops into a ring of
+        // square sparks that drift down and fade. About three seconds, no sound,
+        // and nothing at all for anyone who asks their device for less motion.
+        const CELEBRATE_ABOVE = 85;
+        const fireworksCanvas = document.getElementById('fireworks');
+        let fireworksFrame = null;
+        let fireworksTimers = [];
+
+        function celebrateIfEarned(correct, total) {
+            if (total > 0 && (correct / total) * 100 > CELEBRATE_ABOVE) launchFireworks();
+        }
+
+        function stopFireworks() {
+            if (fireworksFrame) cancelAnimationFrame(fireworksFrame);
+            fireworksFrame = null;
+            fireworksTimers.forEach(clearTimeout);
+            fireworksTimers = [];
+            fireworksCanvas.hidden = true;
+        }
+
+        function launchFireworks() {
+            stopFireworks();
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            const ctx = fireworksCanvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            fireworksCanvas.width = w * dpr;
+            fireworksCanvas.height = h * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            fireworksCanvas.hidden = false;
+
+            const colors = ['#2563eb', '#0f766e', '#7c3aed', '#f59e0b', '#ef4444', '#22c55e'];
+            const rockets = [];
+            const sparks = [];
+            const size = Math.max(4, Math.round(Math.min(w, h) / 120));
+            const shots = 6;
+            for (let i = 0; i < shots; i++) {
+                fireworksTimers.push(setTimeout(() => {
+                    const x = w * (0.15 + 0.7 * ((i * 0.37 + Math.random() * 0.25) % 1));
+                    rockets.push({
+                        x, y: h + size,
+                        vy: -(h * 0.018 + Math.random() * h * 0.004),
+                        burstAt: h * (0.18 + Math.random() * 0.25),
+                        color: colors[i % colors.length]
+                    });
+                }, i * 380));
+            }
+
+            const burst = (r) => {
+                const count = 28;
+                const speed = Math.min(w, h) * 0.006 + Math.random() * 1.5;
+                for (let k = 0; k < count * 1.5; k++) {
+                    // An outer ring and a slower inner one
+                    const inner = k >= count;
+                    const angle = (Math.PI * 2 * k) / (inner ? count / 2 : count) + (inner ? 0.2 : 0);
+                    const v = inner ? speed * 0.55 : speed;
+                    sparks.push({
+                        x: r.x, y: r.y,
+                        vx: Math.cos(angle) * v,
+                        vy: Math.sin(angle) * v,
+                        life: 1,
+                        color: k % 4 === 0 ? '#ffd166' : r.color
+                    });
+                }
+            };
+
+            const started = performance.now();
+            const tick = (now) => {
+                ctx.clearRect(0, 0, w, h);
+                for (let i = rockets.length - 1; i >= 0; i--) {
+                    const r = rockets[i];
+                    r.y += r.vy;
+                    ctx.fillStyle = r.color;
+                    ctx.fillRect(r.x - size / 2, r.y, size, size);
+                    ctx.globalAlpha = 0.4;
+                    ctx.fillRect(r.x - size / 4, r.y + size * 1.5, size / 2, size * 2);
+                    ctx.globalAlpha = 1;
+                    if (r.y <= r.burstAt) {
+                        burst(r);
+                        rockets.splice(i, 1);
+                    }
+                }
+                for (let i = sparks.length - 1; i >= 0; i--) {
+                    const p = sparks[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vx *= 0.97;
+                    p.vy = p.vy * 0.97 + 0.06;
+                    p.life -= 0.012;
+                    if (p.life <= 0) {
+                        sparks.splice(i, 1);
+                        continue;
+                    }
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+                }
+                ctx.globalAlpha = 1;
+                const launching = now - started < shots * 380;
+                if (launching || rockets.length || sparks.length) {
+                    fireworksFrame = requestAnimationFrame(tick);
+                } else {
+                    stopFireworks();
+                }
+            };
+            fireworksFrame = requestAnimationFrame(tick);
+        }
+
         function resetApp() {
+            stopFireworks();
             resultsScreen.classList.remove('active');
             startScreen.classList.add('active');
 
             selectedOperation = null;
             currentDifficulty = 1;
             correctStreak = 0;
+            droppedFrom = [];
 
             // Clear problem tracking
             sessionProblems = [];

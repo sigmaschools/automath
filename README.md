@@ -29,7 +29,7 @@ Automath helps elementary students build **automaticity** with basic math factsâ
 
 - **4 difficulty levels** tailored to K-5 curriculum
 - **Start easy** (facts within 5, simple times tables)
-- **Progress gradually** after 3 consecutive correct answers
+- **Progress gradually** after 2 consecutive correct answers
 - **Get support immediately** when struggling (difficulty decreases on wrong answer)
 - **Cap at age-appropriate level** (12Ã— tables, two-digit arithmetic)
 
@@ -37,7 +37,7 @@ Automath helps elementary students build **automaticity** with basic math factsâ
 
 Automath is designed around cognitive learning science:
 
-- **Mastery Learning** - Students demonstrate proficiency (3 correct in a row) before advancing
+- **Mastery Learning** - Students demonstrate proficiency (2 correct in a row) before advancing
 - **Zone of Proximal Development** - Adaptive difficulty keeps students challenged but not overwhelmed
 - **Automaticity Development** - Focus on instant recall, not calculation strategies
 - **Minimal Cognitive Load** - One problem at a time, clean interface, zero distractions
