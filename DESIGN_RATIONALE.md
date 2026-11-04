@@ -551,6 +551,24 @@ Decided with the product owner on 3 November 2026.
 
 **Alternatives considered**: auto-advancing to the next operation after a few seconds (takes the pause and the review away from the learner); a progress bar (draws the eye during practice, Lesson 1); green for accuracy (reads as "good" even when accuracy is low, so a neutral teal is used). `of` counts this visit only: a resumed warm-up that runs the two missing operations shows "1 of 2"; the whole day's count is Compass's to show, since only Compass knows what was done earlier.
 
+### Decision 15: No "Exercise N of M" Pills (4 November 2026)
+
+**Decision**: The "Exercise N of M" line and the row of one pill per operation (Decision 14, part 2) are removed from Compass runs. The practice screen keeps its "Addition · Problem 3 of 15" line, the screen between operations keeps "One more to go" and the "Next: Subtraction →" button, and the results screen keeps one row per operation. `part` reports still carry `index` and `of`. App version 1.3.0. Closes #4.
+
+**Why**: The pilot student, after the second morning in Compass, said the row of operations above every screen is a distraction. Compass already shows the warm-up's progress in its own top bar ("Warm-up 1 of 4", counted across the day), so the app was repeating it, above the problem, which is where Lesson 1 says nothing should pull the eye.
+
+**Alternatives considered**: keeping the line and dropping only the pills (still repeats Compass's bar); hiding them only during practice (the student's complaint was about the row itself).
+
+### Decision 16: Mixed and Grouped Days Alternate (4 November 2026)
+
+**Decision**: In a Compass run of two or more operations, the layout alternates by the learner's local calendar day. On even days (days since 1 January 1970, counted in local time) the operations are interleaved in one mixed set; on odd days they run grouped, one after another, as before. A mixed set has 15 problems of each listed operation: 15 rounds, each round every operation once in a random order, and never the same operation twice in a row across rounds. Each operation keeps its own difficulty level, streak, trivial-problem limits and recent operands, exactly as if it ran alone. The practice line reads "Mixed · Problem 12 of 60" and there is no screen between operations. Each operation's `part` report appears the moment its 15th problem is answered, with its own items, and `seconds` is the sum of its own response times (the set interleaves it with the others, so wall time cannot be split). Every `part` report gains `mode` (`mixed` or `grouped`). The results screen says "Mixed practice done ✓" with the whole set's score and time, one row per operation (so a weak operation still shows, Decision 13), and every problem. A run of one operation (a resumed warm-up missing one) is always grouped. `mode=mixed` or `mode=grouped` in the URL forces one, for testing. Outside Compass nothing changes. This settles open question 4 with option B (even distribution, random order within each round).
+
+**Why**: The pilot student asked for mixed problems, and the product owner chose to alternate days between mixed and grouped. Mixed practice makes the learner recognise which operation each problem needs instead of repeating one procedure fifteen times, which is the interleaving principle (Rohrer, Dedrick & Stershic 2015: interleaved maths practice scored much better a day and a month later); interleaving suits facts that are already learned, which is what a warm-up practises. Grouped days keep each operation's practice concentrated. Equal rounds keep exactly 15 problems per operation, so Compass's per-operation `part` reports, XP of 2 per operation and resume rules work unchanged; pure random choice would give uneven counts. The app decides the day itself from the device's local date because the learner's day in Compass is the local day too, and that needs no change to Compass, its plan or its shells, and goes live with the next GitHub Pages publish.
+
+**Alternatives considered**: Compass choosing the mode through a new launch parameter (needs a shell build and a plan field for a rule the app can apply alone; possible later if a guide should choose); alternating by session instead of by day (two visits on one day would differ); fully random operation per problem (uneven counts per operation); weighting towards weak operations (open question 4, option C; needs the per-operation fluency data first). Expect mixed days to score a little lower than grouped days: interleaving is harder in the moment while helping retention, so compare mixed days with mixed days.
+
+**Known limit**: all operations of a mixed set finish in its last round, so a learner who stops partway through a mixed set has finished no operation and does the whole set again on the next visit that day (Compass then launches the same parts, still mixed on that day).
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

@@ -330,48 +330,6 @@
         .result-item.time .result-label { color: #7c3aed; }
         .result-item .result-label { font-weight: 600; }
 
-        /* Compass runs: where the learner is among this visit's exercises. */
-        .steps {
-            margin-bottom: 24px;
-        }
-
-        .steps-text {
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #666666;
-            margin-bottom: 10px;
-        }
-
-        .steps-row {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .step {
-            font-size: 14px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            border: 1px solid #d4d4d4;
-            color: #737373;
-            background: #ffffff;
-        }
-
-        .step.done {
-            border-color: #22c55e;
-            background: #e8f5e9;
-            color: #15803d;
-        }
-
-        .step.current {
-            border-color: #2563eb;
-            background: #2563eb;
-            color: #ffffff;
-            font-weight: 600;
-        }
-
         /* The one way forward between exercises: big, colored and right under
            the title, so nobody has to hunt for it. */
         #nextPartBtn {
@@ -411,12 +369,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Compass runs: "Exercise 2 of 4" and one pill per exercise -->
-        <div class="steps hidden" id="steps" aria-live="polite">
-            <div class="steps-text" id="stepsText"></div>
-            <div class="steps-row" id="stepsRow"></div>
-        </div>
-
         <!-- Start Screen -->
         <div id="startScreen" class="screen active">
             <h1>Automath</h1>
@@ -531,10 +483,11 @@
 
     <script>
         // Compass support (app contract 0.1): `compass_parts` in the URL lists the
-        // operations to run in order, with no picker; each finished operation is
-        // reported in a data-compass-report block; the results screen comes after
-        // the last one. Without the parameter the app works exactly as before.
-        const APP_VERSION = '1.2.0';
+        // operations to run, with no picker; each finished operation is reported
+        // in a data-compass-report block; the results screen comes after the last
+        // one. On alternate days the operations are interleaved in one set
+        // (`runMode` below). Without the parameter the app works exactly as before.
+        const APP_VERSION = '1.3.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const compassParts = (() => {
@@ -547,9 +500,27 @@
                 return null;
             }
         })();
+        // How a Compass run of two or more operations is laid out: `grouped` runs
+        // them one after another (15 problems each); `mixed` interleaves them in
+        // one set (15 of each, every operation once per round in a random order,
+        // never the same operation twice in a row). The two alternate by the
+        // learner's local day: even days mixed, odd days grouped. `mode=mixed` or
+        // `mode=grouped` in the URL forces one (for testing).
+        const runMode = (() => {
+            if (!compassParts || compassParts.length < 2) return 'grouped';
+            try {
+                const forced = new URLSearchParams(window.location.search).get('mode');
+                if (forced === 'mixed' || forced === 'grouped') return forced;
+            } catch (e) { /* fall through to the day rule */ }
+            const now = new Date();
+            const localDay = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
+            return localDay % 2 === 0 ? 'mixed' : 'grouped';
+        })();
         let partIndex = 0;
         let runParts = []; // one score per finished operation in this visit
         let problemShownAt = null;
+        let mixedQueue = null; // mixed runs: the operation of each problem, in order
+        let opState = {};      // mixed runs: each operation's own difficulty, streak and trivial counts
 
         // State
         let selectedOperation = null;
@@ -734,7 +705,73 @@
             showNextProblem();
         }
 
+        // Mixed runs: 15 rounds, each with every operation once in a random
+        // order, and never the same operation twice in a row across rounds.
+        function buildMixedQueue(parts) {
+            const queue = [];
+            for (let round = 0; round < totalProblems; round++) {
+                let order;
+                do {
+                    order = [...parts];
+                    for (let i = order.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [order[i], order[j]] = [order[j], order[i]];
+                    }
+                } while (queue.length > 0 && order[0] === queue[queue.length - 1]);
+                queue.push(...order);
+            }
+            return queue;
+        }
+
+        // Mixed runs: one set of every listed operation, interleaved. Each
+        // operation keeps its own difficulty level and streak, as it would on
+        // its own.
+        function startMixedPractice() {
+            mixedQueue = buildMixedQueue(compassParts);
+            opState = {};
+            compassParts.forEach(op => {
+                opState[op] = { difficulty: 1, streak: 0, consecutiveTrivial: 0, totalTrivial: 0, recentOperands: [], answered: 0, correct: 0, ms: 0 };
+            });
+            currentProblem = 0;
+            correctAnswers = 0;
+            sessionProblems = [];
+            recentOperands = [];
+            sessionHistory = [];
+
+            startScreen.classList.remove('active');
+            practiceScreen.classList.add('active');
+
+            startTime = Date.now();
+            showNextProblem();
+        }
+
+        function loadOpState(op) {
+            const s = opState[op];
+            currentDifficulty = s.difficulty;
+            correctStreak = s.streak;
+            consecutiveTrivialCount = s.consecutiveTrivial;
+            totalTrivialCount = s.totalTrivial;
+            recentOperands = s.recentOperands;
+        }
+
+        function saveOpState(op) {
+            const s = opState[op];
+            s.difficulty = currentDifficulty;
+            s.streak = correctStreak;
+            s.consecutiveTrivial = consecutiveTrivialCount;
+            s.totalTrivial = totalTrivialCount;
+            s.recentOperands = recentOperands;
+        }
+
+        function problemsInRun() {
+            return mixedQueue ? mixedQueue.length : totalProblems;
+        }
+
         function showNextProblem() {
+            if (mixedQueue) {
+                selectedOperation = mixedQueue[currentProblem];
+                loadOpState(selectedOperation);
+            }
             let problem = null;
             let attempts = 0;
             const maxAttempts = 50;
@@ -788,9 +825,9 @@
             answerInput.placeholder = '?';
             answerInput.classList.remove('correct', 'incorrect');
             answerInput.focus();
-            const partLabel = compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
-            renderSteps(false);
-            progressEl.textContent = `${partLabel}Problem ${currentProblem + 1} of ${totalProblems}`;
+            if (mixedQueue) saveOpState(selectedOperation);
+            const partLabel = mixedQueue ? 'Mixed · ' : compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
+            progressEl.textContent = `${partLabel}Problem ${currentProblem + 1} of ${problemsInRun()}`;
             problemShownAt = Date.now();
         }
 
@@ -809,6 +846,7 @@
 
             // Save to session history for review
             sessionHistory.push({
+                operation: selectedOperation,
                 num1: currentProblemData.num1,
                 num2: currentProblemData.num2,
                 operator: currentProblemData.operator,
@@ -844,10 +882,23 @@
                 }
             }
 
+            if (mixedQueue) {
+                saveOpState(selectedOperation);
+                const s = opState[selectedOperation];
+                s.answered++;
+                if (isCorrect) s.correct++;
+                s.ms += sessionHistory[sessionHistory.length - 1].ms || 0;
+                // An operation's last problem is answered: it is finished, so
+                // Compass hears about it now, not only at the end of the set.
+                if (s.answered === totalProblems) finishMixedPart(selectedOperation);
+            }
+
             setTimeout(() => {
                 currentProblem++;
-                if (currentProblem < totalProblems) {
+                if (currentProblem < problemsInRun()) {
                     showNextProblem();
+                } else if (mixedQueue) {
+                    showResults();
                 } else {
                     finishPart();
                 }
@@ -871,17 +922,37 @@
             }
         }
 
-        function reportPart() {
+        // Mixed runs: one operation's 15 problems are answered. Its score and
+        // time are its own problems only (time is the sum of their response
+        // times, since the set interleaves them with the other operations).
+        function finishMixedPart(op) {
+            const s = opState[op];
+            const items = sessionHistory.filter(item => item.operation === op);
+            const seconds = Math.round(s.ms / 1000);
+            reportPart({
+                part: op,
+                index: compassParts.indexOf(op) + 1,
+                correct: s.correct,
+                seconds,
+                history: items
+            });
+            runParts.push({ operation: op, correct: s.correct, total: totalProblems, seconds });
+        }
+
+        function reportPart(mixedPart) {
+            const history = mixedPart ? mixedPart.history : sessionHistory;
+            const correct = mixedPart ? mixedPart.correct : correctAnswers;
             const report = {
                 kind: 'part',
-                part: selectedOperation,
-                index: compassParts ? partIndex + 1 : 1,
+                part: mixedPart ? mixedPart.part : selectedOperation,
+                index: mixedPart ? mixedPart.index : compassParts ? partIndex + 1 : 1,
                 of: compassParts ? compassParts.length : 1,
+                mode: runMode,
                 status: 'finished',
-                correct: correctAnswers,
-                wrong: totalProblems - correctAnswers,
-                seconds: Math.round((Date.now() - startTime) / 1000),
-                items: sessionHistory.map(item => ({
+                correct: correct,
+                wrong: totalProblems - correct,
+                seconds: mixedPart ? mixedPart.seconds : Math.round((Date.now() - startTime) / 1000),
+                items: history.map(item => ({
                     prompt: `${item.num1} ${item.operator} ${item.num2}`,
                     answer: item.userAnswer,
                     correctAnswer: item.correctAnswer,
@@ -905,7 +976,6 @@
             document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
             renderScore(document.getElementById('partScore'), part.correct, part.total, part.seconds);
             renderReview(document.getElementById('partReviewBody'), sessionHistory);
-            renderSteps(true);
             document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
             nextPartBtn.textContent = `Next: ${left[0]} →`;
             // A beat before the button takes Enter, so the Enter that answered the
@@ -923,39 +993,6 @@
             selectedOperation = compassParts[partIndex];
             partScreen.classList.remove('active');
             startPractice();
-        }
-
-        // Compass runs: "Exercise 2 of 4" over one pill per exercise in this
-        // visit; finished ones are green with a tick, the current one is blue.
-        // `justFinished` is true on the screens after an exercise, where the
-        // current one is already done.
-        function renderSteps(justFinished) {
-            const steps = document.getElementById('steps');
-            if (!compassParts || compassParts.length < 2) {
-                steps.classList.add('hidden');
-                return;
-            }
-            const finished = justFinished ? partIndex + 1 : partIndex;
-            document.getElementById('stepsText').textContent = finished >= compassParts.length
-                ? `All ${compassParts.length} exercises done`
-                : justFinished
-                    ? `${finished} of ${compassParts.length} exercises done`
-                    : `Exercise ${partIndex + 1} of ${compassParts.length}`;
-            const row = document.getElementById('stepsRow');
-            row.innerHTML = '';
-            compassParts.forEach((p, i) => {
-                const pill = document.createElement('span');
-                pill.className = 'step';
-                if (i < finished) {
-                    pill.classList.add('done');
-                    pill.textContent = `${OPERATION_NAMES[p]} ✓`;
-                } else {
-                    if (i === partIndex) pill.classList.add('current');
-                    pill.textContent = OPERATION_NAMES[p];
-                }
-                row.appendChild(pill);
-            });
-            steps.classList.remove('hidden');
         }
 
         function formatTime(elapsed) {
@@ -1017,12 +1054,12 @@
 
         // One row per operation finished in this visit; the last one is the
         // exercise just finished.
-        function renderSummary() {
+        function renderSummary(markLast = true) {
             const tbody = document.getElementById('summaryTableBody');
             tbody.innerHTML = '';
             runParts.forEach((part, i) => {
                 const row = document.createElement('tr');
-                if (i === runParts.length - 1) row.className = 'current';
+                if (markLast && i === runParts.length - 1) row.className = 'current';
                 [OPERATION_NAMES[part.operation], `${part.correct}/${part.total}`,
                     `${accuracyOf(part.correct, part.total)}%`, formatTime(part.seconds)].forEach((text, col) => {
                     const cell = document.createElement('td');
@@ -1043,13 +1080,21 @@
             // own problems. In Compass mode a table of every exercise in this
             // visit follows, one score per operation.
             const part = runParts[runParts.length - 1];
-            if (compassParts) {
+            if (mixedQueue) {
+                // One set, so one score for it, then one row per operation so a
+                // weak operation still shows.
+                restartBtn.classList.add('hidden');
+                document.getElementById('resultsTitle').textContent = 'Mixed practice done ✓';
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                renderScore(document.getElementById('resultsScore'), correctAnswers, problemsInRun(), elapsed);
+                runParts.sort((a, b) => compassParts.indexOf(a.operation) - compassParts.indexOf(b.operation));
+                renderSummary(false);
+            } else if (compassParts) {
                 restartBtn.classList.add('hidden');
                 document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
                 renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
                 renderSummary();
-                renderSteps(true);
-            } else {
+                } else {
                 const elapsed = Math.floor((Date.now() - startTime) / 1000);
                 renderScore(document.getElementById('resultsScore'), correctAnswers, totalProblems, elapsed);
             }
@@ -1074,7 +1119,9 @@
         }
 
         // Compass chose the operations: skip the picker and start the first one.
-        if (compassParts) {
+        if (compassParts && runMode === 'mixed') {
+            startMixedPractice();
+        } else if (compassParts) {
             selectedOperation = compassParts[0];
             startPractice();
         }

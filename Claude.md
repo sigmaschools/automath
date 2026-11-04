@@ -156,7 +156,7 @@ Based on **The Math Academy Way** principles:
 
 **High Priority:**
 1. LocalStorage progress tracking (remember difficulty levels across sessions)
-2. Mixed practice mode (interleave all operations - better for learning)
+2. Mixed practice on the stand-alone picker (Compass runs already alternate mixed and grouped days, Decision 16)
 3. Visual progress indicator (subtle dots showing 15 problems)
 
 **Medium Priority:**
