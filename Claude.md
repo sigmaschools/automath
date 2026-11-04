@@ -106,19 +106,19 @@ git push
 ```
 
 ### Modifying Difficulty Levels
-Edit the `generateProblem()` function in automath.html (lines ~287-375)
+Edit the `problemsAt()` function in automath.html (each level lists every problem it can give)
 
 ### Changing Session Length
 Edit `totalProblems` variable (line ~260) and update HTML placeholder (line ~209)
 
 ### Adjusting Progression Speed
-Edit streak requirement in `checkAnswer()` function (line ~416)
+Edit the streak requirement (`needed`) in `checkAnswer()`
 
 ## Key Implementation Details
 
 **Adaptive Difficulty:**
 - 4 levels (1-4), start at Level 1
-- Advance: 3 consecutive correct answers
+- Advance: 2 consecutive correct answers (3 to re-enter a level slipped out of this exercise)
 - Regress: Immediately on wrong answer
 - Session: 15 problems (enough to reach Level 4 and practice there)
 

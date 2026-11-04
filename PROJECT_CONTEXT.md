@@ -47,16 +47,17 @@
 
 **Reasoning**:
 - **Alignment with learning science**: Implements zone of proximal development
-- **Mastery learning**: Students must demonstrate competence (3 correct in a row) before advancing
+- **Mastery learning**: Students must demonstrate competence (2 correct in a row, 3 to re-enter a level they slipped out of) before advancing (Decision 17)
 - **Supportive scaffolding**: Immediate difficulty reduction on errors prevents frustration
 - **Appropriate ceiling**: Level 4 cap matches K-5 curriculum expectations
 
 **Implementation Details**:
 ```javascript
 // 4 difficulty levels (1-4)
-// Progression: +1 level after 3 consecutive correct answers
+// Progression: +1 level after 2 consecutive correct answers
+//   (3 to climb back into a level slipped out of earlier in the exercise)
 // Regression: -1 level immediately after any wrong answer
-// Session: 15 problems (enough to reach max difficulty: 3+3+3+6 = 15)
+// Session: 15 problems (level 4 can be reached by problem 7: 2+2+2)
 ```
 
 **Difficulty Level Ranges**:
@@ -239,10 +240,14 @@ To ensure high-quality practice sessions, the app implements validation to preve
 - Prevents patterns like: 8+3, 8-2, 8×5 appearing consecutively
 - Reduces pattern recognition, forces actual fact recall
 
-**4. Retry Logic**
-- Attempts up to 50 times to generate valid problem meeting all criteria
-- Accepts problem if max attempts reached (prevents infinite loops)
-- In practice, valid problems found within 1-3 attempts
+**4. Picking (Decision 17)**
+- `problemsAt(operation, level)` lists every problem a level can give
+- `pickProblem()` draws from the unseen ones, preferring those that keep rules 2 and 3
+- Repeats are a hard rule: if a level runs out, an unseen problem comes from the nearest level (one up first)
+
+**5. Fireworks (Decision 17)**
+- Accuracy above 85% on a score screen launches `launchFireworks()` on a fixed, click-through canvas (~3 s)
+- Skipped when the device prefers reduced motion; stopped by `stopFireworks()` when the learner moves on
 
 ### Review Table
 
@@ -279,6 +284,7 @@ let totalProblems = 15;            // Session length
 let correctAnswers = 0;            // Total correct in session
 let currentDifficulty = 1;         // 1-4 (adaptive difficulty level)
 let correctStreak = 0;             // 0-2+ (for difficulty progression)
+let droppedFrom = [];              // levels slipped out of this exercise (need 3 to re-enter)
 let currentProblemData = null;     // { num1, num2, operator, answer }
 let startTime = null;              // timestamp (for elapsed time)
 
@@ -327,6 +333,7 @@ Managed via CSS classes (no routing library):
 - ✅ Compass mode: `?compass_parts=` runs a list of operations in order and reports each finished one to Compass (see Decision 12 in DESIGN_RATIONALE.md)
 - ✅ Compass mode shows a large blue Next button between operations and colored score values (Decision 14); the "Exercise N of M" pills were removed again (Decision 15)
 - ✅ Compass mode alternates by the learner's local day between grouped operations and one mixed set that interleaves them (Decision 16)
+- ✅ No repeated problems in a session, 2-in-a-row level-up, fireworks above 85% (Decision 17)
 
 ### Known Limitations 🔄
 - No progress tracking across sessions (always starts at Level 1)
