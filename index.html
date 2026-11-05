@@ -969,6 +969,19 @@
                 f.due = today;
             }
 
+            // A right but slow answer on a Mastered fact (often rust after days
+            // away) steps it down to Fluent, not all the way to Learning: it is
+            // asked again the next day, and one fast answer then makes it
+            // Mastered again (Decision 22). A wrong answer is still a slip.
+            function rust(f, today) {
+                f.x = Math.min(3, f.x + 1);
+                f.s = FLUENT;
+                f.d = 2;
+                f.i = 0;
+                f.w = Math.min(15, f.w + 1);
+                f.due = today + 1;
+            }
+
             // One scored answer. Retries of a missed problem are not recorded.
             function recordAnswer(rec, op, key, correct, ms, today) {
                 const idx = INDEX[op].get(key);
@@ -979,7 +992,7 @@
                     rec.typing = rec.typing == null ? ms : Math.round(rec.typing * 0.7 + ms * 0.3);
                 }
                 if (!correct) return slip(f, today, 4);
-                if (!fluent) return slip(f, today, 2);
+                if (!fluent) return f.s === MASTERED ? rust(f, today) : slip(f, today, 2);
                 f.w = Math.max(0, f.w - 3);
                 if (f.s === UNSEEN) {
                     // Fast and right on first sight: the fact was known before

@@ -50,7 +50,7 @@ test('a record survives the trip through Compass unchanged, and a damaged one is
     assert.equal(F.decode('9' + text.slice(1)), null, 'an unknown format is refused');
 });
 
-test('a fact moves Unseen → Learning → Fluent → Mastered, and a slip sends it back', () => {
+test('a fact moves Unseen → Learning → Fluent → Mastered, and a miss sends it back', () => {
     const rec = F.create(DAY);
     const op = 'multiplication';
     const key = core.normalizeProblem(8, 7, '×');
@@ -74,9 +74,28 @@ test('a fact moves Unseen → Learning → Fluent → Mastered, and a slip sends
     assert.equal(f.s, F.MASTERED, 'fluent on 3 separate days');
     const gap = f.due - (DAY + 1 + 3);
     assert.ok(gap >= 7, `next review ${gap} days on`);
-    F.recordAnswer(rec, op, key, true, SLOW, f.due);
-    assert.equal(f.s, F.LEARNING, 'slow counts as a slip');
+    F.recordAnswer(rec, op, key, false, FAST, f.due);
+    assert.equal(f.s, F.LEARNING, 'a wrong answer is a slip');
     assert.equal(f.x, 1);
+});
+
+test('a slow answer on a mastered fact steps it down to Fluent; one fast answer the next day restores it', () => {
+    const rec = F.create(DAY);
+    const op = 'multiplication';
+    const key = core.normalizeProblem(8, 7, '×');
+    const f = factOf(rec, op, key);
+    f.s = F.MASTERED; f.d = 3; f.i = 4; f.due = DAY;
+    // Back from a week away: right, but slow.
+    F.recordAnswer(rec, op, key, true, SLOW, DAY + 7);
+    assert.equal(f.s, F.FLUENT, 'not sent back to Learning');
+    assert.equal(f.due, DAY + 8, 'asked again the next day');
+    assert.equal(f.x, 1);
+    F.recordAnswer(rec, op, key, true, FAST, DAY + 8);
+    assert.equal(f.s, F.MASTERED);
+    // Slow on a Fluent fact is still a slip.
+    f.s = F.FLUENT; f.d = 1; f.due = DAY + 9;
+    F.recordAnswer(rec, op, key, true, SLOW, DAY + 9);
+    assert.equal(f.s, F.LEARNING);
 });
 
 test('fast and right on first sight counts as two days; one more later day masters it', () => {

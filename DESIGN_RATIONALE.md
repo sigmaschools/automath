@@ -644,6 +644,14 @@ The picker also changed in one way the tests found: a level-1 learner who stayed
 
 **Cost**: fewer asks a day means slower progress through the fact table. In `node tests/simulate-days.js`, the learner who knows almost every fact graduates on days 62, 99, 49 and 87 (+, −, ×, ÷; was 34, 58, 32, 46), and the learner weak on the 8s and 9s on days 78, 100, 102 and 116 (was 37, 64, 71, 67). The slowest model learner graduates only multiplication within 180 days. If that is too slow, the next levers are more new facts per day or fewer known-fact fillers, not a longer day.
 
+### Decision 22: A Slow Answer Steps a Mastered Fact Down, Not Back (5 November 2026)
+
+**Decision**: A right but slow answer on a Mastered fact makes it Fluent again, with two days' credit, due the next day. One fast answer then makes it Mastered again. A wrong answer is still a slip back to Learning (Decision 19), and so is a slow answer on a fact that is not yet Mastered. Either way the fact counts as having slipped before, so its later reviews come sooner. App version 1.7.0.
+
+**Why**: the first answer after days away (a vacation, a weekend, an illness) is often a little slow even when the fact is known. Under Decision 19 that one answer wiped out all of the fact's credit, so a learner would have to re-earn mastery over three more days. Being slow but right is weaker evidence of forgetting than being wrong, so it gets a smaller step back. Nothing in the model expires during an absence: "3 separate days" never needed consecutive days, and a review is due *on or after* its date.
+
+**Simulation** (`node tests/simulate-days.js`, at 10 problems per operation): the learner who knows almost every fact graduates on days 55, 91, 48 and 73 (was 62, 99, 49, 87 at 10 problems without this rule); the learner weak on the 8s and 9s on days 71, 103, 97 and 105 (was 78, 100, 102, 116).
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
