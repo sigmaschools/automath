@@ -29,9 +29,10 @@ Automath helps elementary students build **automaticity** with basic math facts�
 
 - **4 difficulty levels** tailored to K-5 curriculum
 - **Start easy** (facts within 5, simple times tables)
-- **Progress gradually** after 2 consecutive correct answers
+- **Progress gradually** after 2 quick, correct answers in a row (no visible timer)
+- **Correct every miss** - the right answer shows, and the problem comes back once a few problems later
 - **Get support immediately** when struggling (difficulty decreases on wrong answer)
-- **Cap at age-appropriate level** (12× tables, two-digit arithmetic)
+- **Cap at age-appropriate level** (12× tables, addition and subtraction facts within 20)
 
 ## Educational Principles
 
@@ -110,6 +111,10 @@ git clone https://github.com/sigmaschools/automath.git
 
 # Open in browser
 open automath.html
+
+# Run the tests (Node 18+)
+node --test
+node tests/simulate.js
 
 # Or use a local server
 python3 -m http.server 8000

@@ -148,6 +148,18 @@
 
         .input-container {
             width: 100%;
+            position: relative;
+        }
+
+        /* The red cross beside the right answer after a miss (Decision 18) */
+        .answer-mark {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 48px;
+            color: #ef4444;
+            pointer-events: none;
         }
 
         input[type="number"] {
@@ -192,6 +204,17 @@
             border-top-color: #ef4444;
             color: #ef4444;
             caret-color: transparent;
+        }
+
+        /* After a miss: the right answer, in dark text on the red box */
+        input[type="number"].corrected {
+            background-color: #ffebee;
+            border-top-color: #ef4444;
+            caret-color: transparent;
+        }
+
+        input[type="number"].corrected::placeholder {
+            color: #111111;
         }
 
         input[type="number"]::placeholder {
@@ -366,6 +389,48 @@
             margin-bottom: 10px;
         }
 
+        /* On-screen number pad for touch screens (Decision 18) */
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 320px;
+            margin: 0 auto;
+        }
+
+        .keypad.hidden {
+            display: none;
+        }
+
+        .keypad button {
+            background: #f5f5f5;
+            color: #000000;
+            border: 1px solid #dddddd;
+            border-radius: 10px;
+            font-size: 30px;
+            height: 64px;
+            padding: 0;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .keypad button:active {
+            background: #e5e5e5;
+        }
+
+        .keypad button.key-enter {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        body.with-keypad .problem-container {
+            margin: 20px auto 20px auto;
+        }
+
         /* Fireworks over a score above 85% (Decision 17). Clicks pass through. */
         #fireworks {
             position: fixed;
@@ -409,7 +474,23 @@
                 </div>
                 <div class="input-container">
                     <input type="number" id="answer" placeholder="?" autocomplete="off">
+                    <span class="answer-mark" id="answerMark" aria-hidden="true"></span>
                 </div>
+            </div>
+
+            <div class="keypad hidden" id="keypad">
+                <button type="button" data-key="1">1</button>
+                <button type="button" data-key="2">2</button>
+                <button type="button" data-key="3">3</button>
+                <button type="button" data-key="4">4</button>
+                <button type="button" data-key="5">5</button>
+                <button type="button" data-key="6">6</button>
+                <button type="button" data-key="7">7</button>
+                <button type="button" data-key="8">8</button>
+                <button type="button" data-key="9">9</button>
+                <button type="button" data-key="back" aria-label="Delete">⌫</button>
+                <button type="button" data-key="0">0</button>
+                <button type="button" data-key="enter" class="key-enter">Enter</button>
             </div>
 
             <div class="progress" id="progress">Problem 1 of 15</div>
@@ -493,24 +574,219 @@
 
     <canvas id="fireworks" hidden></canvas>
 
+    <!-- The practice rules, with no page code: which problems each level holds,
+         how the next one is picked, when a learner moves up or down, and what
+         counts as fluent. tests/ loads this block on its own (Node, no browser),
+         so keep it free of the DOM. -->
+    <script id="automath-core">
+        const AutomathCore = (() => {
+            // A correct answer is fluent when it comes within this many ms
+            // (Decision 18). Never shown to the learner; it decides levelling up
+            // and is reported to Compass.
+            const FLUENT_MS = { addition: 3000, subtraction: 3000, multiplication: 3000, division: 3000 };
+            // An answer that took longer than this is flagged in the report: the
+            // learner most likely stopped, so its time says little about recall.
+            const OUTLIER_MS = 30000;
+            // A missed problem comes back once, after this many other problems.
+            const RETRY_AFTER = 3;
+
+            function isTrivial(num1, num2, operation) {
+                if (operation === 'multiplication') return num2 === 0 || num2 === 1;
+                if (operation === 'division') return num2 === 1;
+                if (operation === 'addition') return num2 === 0;
+                if (operation === 'subtraction') return num2 === 0;
+                return false;
+            }
+
+            // 7 × 2 and 2 × 7 are the same fact; 7 − 2 and 2 − 7 are not.
+            function normalizeProblem(num1, num2, operator) {
+                if (operator === '+' || operator === '×') {
+                    return `${Math.min(num1, num2)},${Math.max(num1, num2)},${operator}`;
+                }
+                return `${num1},${num2},${operator}`;
+            }
+
+            // Every problem a level can give, listed once. Every level is a set
+            // of facts (Decision 18): level 4 of addition and subtraction is the
+            // facts that cross ten, not two-digit sums.
+            const poolCache = {};
+            function problemsAt(operation, level) {
+                const key = `${operation}${level}`;
+                if (poolCache[key]) return poolCache[key];
+                const list = [];
+                const add = (num1, num2, operator, answer) => list.push({ num1, num2, operator, answer });
+                const pairs = (aFrom, aTo, bFrom, bTo, make) => {
+                    for (let a = aFrom; a <= aTo; a++) {
+                        const from = typeof bFrom === 'function' ? bFrom(a) : bFrom;
+                        const to = typeof bTo === 'function' ? bTo(a) : bTo;
+                        for (let b = from; b <= to; b++) make(a, b);
+                    }
+                };
+                switch (operation) {
+                    case 'addition': {
+                        const plus = (a, b) => add(a, b, '+', a + b);
+                        if (level === 1) pairs(1, 4, 1, a => 5 - a, plus);                    // within 5
+                        else if (level === 2) pairs(1, 9, 1, a => 10 - a, plus);              // within 10
+                        else if (level === 3) pairs(5, 19, 1, a => Math.min(10, 20 - a), plus); // within 20
+                        else pairs(2, 9, a => Math.max(2, 11 - a), 9, plus);                  // crossing ten: 8 + 7
+                        break;
+                    }
+                    case 'subtraction': {
+                        const minus = (a, b) => add(a, b, '−', a - b);
+                        if (level === 1) pairs(2, 5, 1, a => a - 1, minus);                       // within 5
+                        else if (level === 2) pairs(3, 10, 1, a => a - 1, minus);                 // within 10
+                        else if (level === 3) pairs(6, 20, 1, a => Math.min(10, a - 1), minus);   // within 20
+                        else pairs(11, 18, a => Math.max(2, a - 9), 9, minus);                    // crossing ten: 13 − 6
+                        break;
+                    }
+                    case 'multiplication': {
+                        const times = (a, b) => add(a, b, '×', a * b);
+                        const [aTo, bTo] = [[10, 2], [10, 5], [10, 10], [12, 12]][level - 1];
+                        pairs(1, aTo, 0, bTo, times);
+                        break;
+                    }
+                    case 'division': {
+                        const over = (b, q) => add(b * q, b, '÷', q);
+                        const [bFrom, bTo, qTo] = [[1, 2, 10], [1, 5, 10], [2, 10, 12], [2, 12, 12]][level - 1];
+                        pairs(bFrom, bTo, 1, qTo, over);
+                        break;
+                    }
+                }
+                poolCache[key] = list;
+                return list;
+            }
+
+            // One operation's practice state within an exercise.
+            function newState() {
+                return {
+                    level: 1,
+                    streak: 0,          // fluent correct answers in a row
+                    droppedFrom: [],    // levels slipped out of this exercise
+                    seen: new Set(),    // normalized problems already shown
+                    consecutiveTrivial: 0,
+                    totalTrivial: 0,
+                    recentOperands: []  // the numbers of the last two problems
+                };
+            }
+
+            // The next problem: never one already seen (7 × 2 and 2 × 7 count as
+            // one). Each unseen problem gets a cost: 1 if it uses a number from the
+            // last two problems, 3 if it breaks the trivial limits (two ×0/×1-type
+            // problems in a row, or more than 3), and 2.5 for each level it is away
+            // from the learner's level (a little more going down than up). The
+            // cheapest is picked, at random among equals. So the soft rules give
+            // way before the level does, except that a trivial problem the limits
+            // forbid is swapped for a fresh one from the next level: a learner who
+            // stays on level 1 a long time gets ×3 facts, not a run of ×0 and ×1.
+            function pickProblem(operation, s, rand = Math.random) {
+                let best = [];
+                let bestCost = Infinity;
+                for (let l = 1; l <= 4; l++) {
+                    const away = l >= s.level ? (l - s.level) * 2.5 : (s.level - l) * 2.6;
+                    if (away > bestCost) continue;
+                    problemsAt(operation, l).forEach(p => {
+                        if (s.seen.has(normalizeProblem(p.num1, p.num2, p.operator))) return;
+                        const trivial = isTrivial(p.num1, p.num2, operation);
+                        const cost = away
+                            + (trivial && (s.consecutiveTrivial >= 1 || s.totalTrivial >= 3) ? 3 : 0)
+                            + (s.recentOperands.includes(p.num1) || s.recentOperands.includes(p.num2) ? 1 : 0);
+                        if (cost < bestCost) {
+                            bestCost = cost;
+                            best = [];
+                        }
+                        if (cost === bestCost) best.push(p);
+                    });
+                }
+                if (best.length > 0) return best[Math.floor(rand() * best.length)];
+                // Every problem of this operation has been seen (cannot happen in
+                // 15 problems, but never get stuck): repeat one at this level.
+                const pool = problemsAt(operation, s.level);
+                return pool[Math.floor(rand() * pool.length)];
+            }
+
+            function recordShown(s, problem, operation) {
+                s.seen.add(normalizeProblem(problem.num1, problem.num2, problem.operator));
+                if (isTrivial(problem.num1, problem.num2, operation)) {
+                    s.consecutiveTrivial++;
+                    s.totalTrivial++;
+                } else {
+                    s.consecutiveTrivial = 0;
+                }
+                s.recentOperands = [...s.recentOperands, problem.num1, problem.num2].slice(-4);
+            }
+
+            function isFluent(operation, correct, ms) {
+                return correct && ms != null && ms <= FLUENT_MS[operation];
+            }
+
+            // Moving between levels (Decisions 17 and 18): up after 2 fluent
+            // correct answers in a row (3 to go back into a level slipped out of
+            // this exercise); down one on any wrong answer. A correct but slow
+            // answer neither builds nor breaks the streak: the fact is known but
+            // not yet automatic, so the learner stays at this level.
+            function recordAnswer(s, correct, fluent) {
+                if (!correct) {
+                    s.streak = 0;
+                    if (s.level > 1) {
+                        if (!s.droppedFrom.includes(s.level)) s.droppedFrom.push(s.level);
+                        s.level--;
+                    }
+                    return;
+                }
+                if (!fluent) return;
+                s.streak++;
+                const needed = s.droppedFrom.includes(s.level + 1) ? 3 : 2;
+                if (s.streak >= needed && s.level < 4) {
+                    s.level++;
+                    s.streak = 0;
+                }
+            }
+
+            // Mixed runs: `rounds` rounds, each with every operation once in a
+            // random order, never the same operation twice in a row.
+            function buildMixedQueue(parts, rounds, rand = Math.random) {
+                const queue = [];
+                for (let round = 0; round < rounds; round++) {
+                    let order;
+                    do {
+                        order = [...parts];
+                        for (let i = order.length - 1; i > 0; i--) {
+                            const j = Math.floor(rand() * (i + 1));
+                            [order[i], order[j]] = [order[j], order[i]];
+                        }
+                    } while (parts.length > 1 && queue.length > 0 && order[0] === queue[queue.length - 1]);
+                    queue.push(...order);
+                }
+                return queue;
+            }
+
+            return {
+                FLUENT_MS, OUTLIER_MS, RETRY_AFTER,
+                isTrivial, normalizeProblem, problemsAt, newState, pickProblem,
+                recordShown, isFluent, recordAnswer, buildMixedQueue
+            };
+        })();
+    </script>
     <script>
         // Compass support (app contract 0.1): `compass_parts` in the URL lists the
         // operations to run, with no picker; each finished operation is reported
         // in a data-compass-report block; the results screen comes after the last
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
-        const APP_VERSION = '1.4.0';
+        // The practice rules themselves live in AutomathCore, above.
+        const APP_VERSION = '1.5.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
+        const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
+        const CORRECTION_MS = 1500;  // after a miss: the right answer stays this long
+        const urlParams = (() => {
+            try { return new URLSearchParams(window.location.search); } catch (e) { return new URLSearchParams(); }
+        })();
         const compassParts = (() => {
-            try {
-                const value = new URLSearchParams(window.location.search).get('compass_parts');
-                if (!value) return null;
-                const parts = [...new Set(value.split(',').map(p => p.trim().toLowerCase()).filter(p => OPERATIONS.includes(p)))];
-                return parts.length > 0 ? parts : null;
-            } catch (e) {
-                return null;
-            }
+            const value = urlParams.get('compass_parts');
+            if (!value) return null;
+            const parts = [...new Set(value.split(',').map(p => p.trim().toLowerCase()).filter(p => OPERATIONS.includes(p)))];
+            return parts.length > 0 ? parts : null;
         })();
         // How a Compass run of two or more operations is laid out: `grouped` runs
         // them one after another (15 problems each); `mixed` interleaves them in
@@ -520,37 +796,63 @@
         // `mode=grouped` in the URL forces one (for testing).
         const runMode = (() => {
             if (!compassParts || compassParts.length < 2) return 'grouped';
-            try {
-                const forced = new URLSearchParams(window.location.search).get('mode');
-                if (forced === 'mixed' || forced === 'grouped') return forced;
-            } catch (e) { /* fall through to the day rule */ }
+            const forced = urlParams.get('mode');
+            if (forced === 'mixed' || forced === 'grouped') return forced;
             const now = new Date();
             const localDay = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
             return localDay % 2 === 0 ? 'mixed' : 'grouped';
         })();
-        let partIndex = 0;
-        let runParts = []; // one score per finished operation in this visit
-        let problemShownAt = null;
-        let mixedQueue = null; // mixed runs: the operation of each problem, in order
-        let opState = {};      // mixed runs: each operation's own difficulty, streak and trivial counts
+        // A number pad on the page for touch screens, so the device keyboard does
+        // not cover the problem and typing time does not count as recall time.
+        // `keypad=1` or `keypad=0` in the URL forces it on or off (for testing).
+        const useKeypad = (() => {
+            const forced = urlParams.get('keypad');
+            if (forced === '1') return true;
+            if (forced === '0') return false;
+            return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        })();
 
-        // State
+        let partIndex = 0;
+        let runParts = [];      // one score per finished operation in this visit
+        let mixedQueue = null;  // mixed runs: the operation of each problem, in order
+        let opState = {};       // each operation's rules state (AutomathCore.newState) and counts
+
         let selectedOperation = null;
-        let currentProblem = 0;
-        let totalProblems = 15;
+        let currentProblem = 0; // scored problems answered so far in this exercise
+        const totalProblems = 15;
         let correctAnswers = 0;
         let startTime = null;
-        let currentDifficulty = 1; // Start at easiest level (1-4)
         let currentProblemData = null;
-        let correctStreak = 0; // Track consecutive correct answers
-        let droppedFrom = []; // Levels the learner slipped out of this exercise
+        let currentIsRetry = false;
+        let awaitingAnswer = false;
+        let pendingRetries = [];  // missed problems still to come back once
+        let sessionHistory = [];  // every scored problem and answer, for review and the report
 
-        // Problem tracking to prevent duplicates and manage trivial problems
-        let sessionProblems = []; // All problems shown this session
-        let consecutiveTrivialCount = 0; // Consecutive trivial problems
-        let totalTrivialCount = 0; // Total trivial problems in session
-        let recentOperands = []; // Track last 2 operands used
-        let sessionHistory = []; // Track all problems and answers for review
+        // Response time counts only while the page is visible: a learner who
+        // switches away and back is not timed for the break.
+        let problemShownAt = null;
+        let problemHiddenMs = 0;
+        let exerciseHiddenMs = 0;
+        let hiddenSince = null;
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                hiddenSince = Date.now();
+            } else if (hiddenSince !== null) {
+                const away = Date.now() - hiddenSince;
+                problemHiddenMs += away;
+                exerciseHiddenMs += away;
+                hiddenSince = null;
+            }
+        });
+        function hiddenNow() {
+            return hiddenSince !== null ? Date.now() - hiddenSince : 0;
+        }
+        function responseMs() {
+            return problemShownAt ? Math.max(0, Date.now() - problemShownAt - problemHiddenMs - hiddenNow()) : null;
+        }
+        function exerciseSeconds() {
+            return Math.round(Math.max(0, Date.now() - startTime - exerciseHiddenMs - hiddenNow()) / 1000);
+        }
 
         // Elements
         const startScreen = document.getElementById('startScreen');
@@ -561,7 +863,9 @@
         const problemNum2El = document.getElementById('problemNum2');
         const problemOpEl = document.getElementById('problemOp');
         const answerInput = document.getElementById('answer');
+        const answerMark = document.getElementById('answerMark');
         const progressEl = document.getElementById('progress');
+        const keypad = document.getElementById('keypad');
 
         // Operation buttons - start practice immediately when clicked
         document.querySelectorAll('.operation-btn').forEach(btn => {
@@ -577,249 +881,151 @@
         const nextPartBtn = document.getElementById('nextPartBtn');
         nextPartBtn.addEventListener('click', startNextPart);
 
-        // Helper function: Check if problem is trivial
-        function isTrivial(num1, num2, operation) {
-            if (operation === 'multiplication') return num2 === 0 || num2 === 1;
-            if (operation === 'division') return num2 === 1;
-            if (operation === 'addition') return num2 === 0;
-            if (operation === 'subtraction') return num2 === 0;
-            return false;
+        if (useKeypad) {
+            document.body.classList.add('with-keypad');
+            keypad.classList.remove('hidden');
+            answerInput.setAttribute('inputmode', 'none');
+            keypad.addEventListener('click', (e) => {
+                const key = e.target.closest('button')?.dataset.key;
+                if (!key || !awaitingAnswer) return;
+                if (key === 'enter') {
+                    checkAnswer();
+                } else if (key === 'back') {
+                    answerInput.value = answerInput.value.slice(0, -1);
+                } else if (answerInput.value.length < 3) {
+                    answerInput.value += key;
+                }
+                if (key !== 'enter') answerInput.focus();
+            });
         }
 
-        // Helper function: Normalize problem for duplicate checking
-        // For commutative operations (addition, multiplication), order doesn't matter
-        function normalizeProblem(num1, num2, operator) {
-            if (operator === '+' || operator === '×') {
-                // Commutative: treat (7,2) and (2,7) as same
-                return `${Math.min(num1, num2)},${Math.max(num1, num2)},${operator}`;
-            }
-            // Non-commutative: (7,2) and (2,7) are different
-            return `${num1},${num2},${operator}`;
+        function newCounts() {
+            return { answered: 0, correct: 0, fluent: 0, ms: 0 };
         }
 
-        // Helper function: Check if problem is duplicate
-        function isDuplicate(num1, num2, operator) {
-            const normalized = normalizeProblem(num1, num2, operator);
-            return sessionProblems.includes(normalized);
-        }
-
-        // Helper function: Check if operand was used in last 2 problems
-        function hasRecentOperand(num1, num2) {
-            return recentOperands.includes(num1) || recentOperands.includes(num2);
-        }
-
-        // Every problem a level can give, listed once. Picking from the list
-        // (rather than drawing at random and retrying) means a session never
-        // repeats a problem while an unused one is left anywhere in reach.
-        const poolCache = {};
-        function problemsAt(operation, level) {
-            const key = `${operation}${level}`;
-            if (poolCache[key]) return poolCache[key];
-            const list = [];
-            const add = (num1, num2, operator, answer) => list.push({ num1, num2, operator, answer });
-            const pairs = (aFrom, aTo, bFrom, bTo, make) => {
-                for (let a = aFrom; a <= aTo; a++) {
-                    for (let b = bFrom; b <= (typeof bTo === 'function' ? bTo(a) : bTo); b++) {
-                        make(a, b);
-                    }
-                }
-            };
-            switch (operation) {
-                case 'addition': {
-                    const plus = (a, b) => add(a, b, '+', a + b);
-                    if (level === 1) pairs(1, 4, 1, a => 5 - a, plus);        // facts within 5
-                    else if (level === 2) pairs(1, 9, 1, a => 10 - a, plus);  // facts within 10
-                    else if (level === 3) pairs(5, 19, 1, 10, plus);          // facts within 20
-                    else pairs(10, 49, 5, 34, plus);                          // two-digit, within 75
-                    break;
-                }
-                case 'subtraction': {
-                    const minus = (a, b) => add(a, b, '−', a - b);
-                    if (level === 1) pairs(2, 5, 1, a => a - 1, minus);                     // within 5
-                    else if (level === 2) pairs(3, 10, 1, a => a - 1, minus);               // within 10
-                    else if (level === 3) pairs(6, 20, 1, a => Math.min(10, a - 1), minus); // within 20
-                    else pairs(20, 69, 5, 34, minus);                                       // two-digit
-                    break;
-                }
-                case 'multiplication': {
-                    const times = (a, b) => add(a, b, '×', a * b);
-                    const [aTo, bTo] = [[10, 2], [10, 5], [10, 10], [12, 12]][level - 1];
-                    pairs(1, aTo, 0, bTo, times);
-                    break;
-                }
-                case 'division': {
-                    const over = (b, q) => add(b * q, b, '÷', q);
-                    const [bFrom, bTo, qTo] = [[1, 2, 10], [1, 5, 10], [2, 10, 12], [2, 12, 12]][level - 1];
-                    pairs(bFrom, bTo, 1, qTo, over);
-                    break;
-                }
-            }
-            poolCache[key] = list;
-            return list;
-        }
-
-        // The next problem: never one already seen this session (7 × 2 and
-        // 2 × 7 count as the same). Among unseen problems at the learner's
-        // level, prefer one that keeps the soft rules (no back-to-back trivial
-        // problems, at most 3 trivial ones, no number from the last two
-        // problems). If every problem at this level has been seen, take an
-        // unseen one from the nearest level (one up first, then one down).
-        function pickProblem(operation, level) {
-            const order = [level, level + 1, level - 1, level + 2, level - 2, level + 3, level - 3]
-                .filter(l => l >= 1 && l <= 4);
-            for (const l of order) {
-                const unseen = problemsAt(operation, l).filter(p => !isDuplicate(p.num1, p.num2, p.operator));
-                if (unseen.length === 0) continue;
-                let best = [];
-                let bestCost = Infinity;
-                unseen.forEach(p => {
-                    const trivial = isTrivial(p.num1, p.num2, operation);
-                    const cost = (trivial && (consecutiveTrivialCount >= 1 || totalTrivialCount >= 3) ? 2 : 0)
-                        + (hasRecentOperand(p.num1, p.num2) ? 1 : 0);
-                    if (cost < bestCost) {
-                        bestCost = cost;
-                        best = [];
-                    }
-                    if (cost === bestCost) best.push(p);
-                });
-                return best[Math.floor(Math.random() * best.length)];
-            }
-            // Every problem of this operation has been seen (cannot happen in
-            // 15 problems, but never get stuck): repeat one at this level.
-            const pool = problemsAt(operation, level);
-            return pool[Math.floor(Math.random() * pool.length)];
+        function beginExercise() {
+            currentProblem = 0;
+            correctAnswers = 0;
+            pendingRetries = [];
+            sessionHistory = [];
+            exerciseHiddenMs = 0;
+            startScreen.classList.remove('active');
+            practiceScreen.classList.add('active');
+            startTime = Date.now();
+            advance();
         }
 
         function startPractice() {
-            currentProblem = 0;
-            correctAnswers = 0;
-            currentDifficulty = 1; // Start at easiest level
-            correctStreak = 0;
-            droppedFrom = [];
-
-            // Reset problem tracking
-            sessionProblems = [];
-            consecutiveTrivialCount = 0;
-            totalTrivialCount = 0;
-            recentOperands = [];
-            sessionHistory = [];
-
-            startScreen.classList.remove('active');
-            practiceScreen.classList.add('active');
-
-            startTime = Date.now();
-            showNextProblem();
-        }
-
-        // Mixed runs: 15 rounds, each with every operation once in a random
-        // order, and never the same operation twice in a row across rounds.
-        function buildMixedQueue(parts) {
-            const queue = [];
-            for (let round = 0; round < totalProblems; round++) {
-                let order;
-                do {
-                    order = [...parts];
-                    for (let i = order.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [order[i], order[j]] = [order[j], order[i]];
-                    }
-                } while (queue.length > 0 && order[0] === queue[queue.length - 1]);
-                queue.push(...order);
-            }
-            return queue;
+            mixedQueue = null;
+            opState = { [selectedOperation]: { rules: AutomathCore.newState(), ...newCounts() } };
+            beginExercise();
         }
 
         // Mixed runs: one set of every listed operation, interleaved. Each
-        // operation keeps its own difficulty level and streak, as it would on
-        // its own.
+        // operation keeps its own level, streak and trivial counts, as it would
+        // on its own.
         function startMixedPractice() {
-            mixedQueue = buildMixedQueue(compassParts);
+            mixedQueue = AutomathCore.buildMixedQueue(compassParts, totalProblems);
             opState = {};
             compassParts.forEach(op => {
-                opState[op] = { difficulty: 1, streak: 0, droppedFrom: [], consecutiveTrivial: 0, totalTrivial: 0, recentOperands: [], answered: 0, correct: 0, ms: 0 };
+                opState[op] = { rules: AutomathCore.newState(), ...newCounts() };
             });
-            currentProblem = 0;
-            correctAnswers = 0;
-            sessionProblems = [];
-            recentOperands = [];
-            sessionHistory = [];
-
-            startScreen.classList.remove('active');
-            practiceScreen.classList.add('active');
-
-            startTime = Date.now();
-            showNextProblem();
-        }
-
-        function loadOpState(op) {
-            const s = opState[op];
-            currentDifficulty = s.difficulty;
-            correctStreak = s.streak;
-            droppedFrom = s.droppedFrom;
-            consecutiveTrivialCount = s.consecutiveTrivial;
-            totalTrivialCount = s.totalTrivial;
-            recentOperands = s.recentOperands;
-        }
-
-        function saveOpState(op) {
-            const s = opState[op];
-            s.difficulty = currentDifficulty;
-            s.streak = correctStreak;
-            s.droppedFrom = droppedFrom;
-            s.consecutiveTrivial = consecutiveTrivialCount;
-            s.totalTrivial = totalTrivialCount;
-            s.recentOperands = recentOperands;
+            beginExercise();
         }
 
         function problemsInRun() {
             return mixedQueue ? mixedQueue.length : totalProblems;
         }
 
-        function showNextProblem() {
-            if (mixedQueue) {
-                selectedOperation = mixedQueue[currentProblem];
-                loadOpState(selectedOperation);
-            }
-            const problem = pickProblem(selectedOperation, currentDifficulty);
-            const { num1, num2, operator } = problem;
-            sessionProblems.push(normalizeProblem(num1, num2, operator));
-            if (isTrivial(num1, num2, selectedOperation)) {
-                consecutiveTrivialCount++;
-                totalTrivialCount++;
+        // What comes next: a missed problem that is due again, else the next
+        // new problem, else any missed problem not yet retried, else the end.
+        function advance() {
+            const due = pendingRetries.findIndex(r => r.dueAt <= currentProblem);
+            if (due >= 0) {
+                showRetry(pendingRetries.splice(due, 1)[0]);
+            } else if (currentProblem < problemsInRun()) {
+                showNextProblem();
+            } else if (pendingRetries.length > 0) {
+                showRetry(pendingRetries.shift());
+            } else if (mixedQueue) {
+                showResults();
             } else {
-                consecutiveTrivialCount = 0;
+                finishPart();
             }
-            // Remember the numbers of the last two problems
-            recentOperands = [...recentOperands, num1, num2].slice(-4);
+        }
 
+        function partLabel() {
+            return mixedQueue ? 'Mixed · ' : compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
+        }
+
+        function showNextProblem() {
+            if (mixedQueue) selectedOperation = mixedQueue[currentProblem];
+            const rules = opState[selectedOperation].rules;
+            const problem = AutomathCore.pickProblem(selectedOperation, rules);
+            AutomathCore.recordShown(rules, problem, selectedOperation);
+            currentIsRetry = false;
+            displayProblem(problem);
+            progressEl.textContent = `${partLabel()}Problem ${currentProblem + 1} of ${problemsInRun()}`;
+        }
+
+        // A missed problem, once more. It is not scored and does not move the
+        // learner's level; it is the chance to get it right.
+        function showRetry(retry) {
+            selectedOperation = retry.operation;
+            currentIsRetry = true;
+            displayProblem(retry.problem);
+            progressEl.textContent = `${partLabel()}Try this one again`;
+        }
+
+        function displayProblem(problem) {
             currentProblemData = problem;
-            problemNum1El.textContent = currentProblemData.num1;
-            problemOpEl.textContent = currentProblemData.operator;
-            problemNum2El.textContent = currentProblemData.num2;
+            problemNum1El.textContent = problem.num1;
+            problemOpEl.textContent = problem.operator;
+            problemNum2El.textContent = problem.num2;
             answerInput.value = '';
             answerInput.placeholder = '?';
-            answerInput.classList.remove('correct', 'incorrect');
+            answerInput.classList.remove('correct', 'incorrect', 'corrected');
+            answerMark.textContent = '';
             answerInput.focus();
-            if (mixedQueue) saveOpState(selectedOperation);
-            const partLabel = mixedQueue ? 'Mixed · ' : compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
-            progressEl.textContent = `${partLabel}Problem ${currentProblem + 1} of ${problemsInRun()}`;
             problemShownAt = Date.now();
+            problemHiddenMs = 0;
+            awaitingAnswer = true;
         }
 
         answerInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                checkAnswer();
-            }
+            if (e.key === 'Enter') checkAnswer();
         });
 
+        function showFeedback(isCorrect) {
+            answerInput.value = '';
+            if (isCorrect) {
+                answerInput.placeholder = '✓';
+                answerInput.classList.add('correct');
+            } else {
+                // The right answer, in the box, with a red cross beside it.
+                answerInput.placeholder = String(currentProblemData.answer);
+                answerInput.classList.add('corrected');
+                answerMark.textContent = '✗';
+            }
+        }
+
         function checkAnswer() {
+            if (!awaitingAnswer) return;
             const userAnswer = parseInt(answerInput.value);
-
             if (isNaN(userAnswer)) return;
+            awaitingAnswer = false;
 
+            const ms = responseMs();
             const isCorrect = userAnswer === currentProblemData.answer;
+            showFeedback(isCorrect);
+            const wait = isCorrect ? FEEDBACK_MS : CORRECTION_MS;
 
-            // Save to session history for review
+            if (currentIsRetry) {
+                setTimeout(advance, wait);
+                return;
+            }
+
+            const fluent = AutomathCore.isFluent(selectedOperation, isCorrect, ms);
             sessionHistory.push({
                 operation: selectedOperation,
                 num1: currentProblemData.num1,
@@ -828,72 +1034,50 @@
                 correctAnswer: currentProblemData.answer,
                 userAnswer: userAnswer,
                 isCorrect: isCorrect,
-                ms: problemShownAt ? Date.now() - problemShownAt : null
+                fluent: fluent,
+                ms: ms
             });
 
+            const s = opState[selectedOperation];
+            AutomathCore.recordAnswer(s.rules, isCorrect, fluent);
+            s.answered++;
+            s.ms += ms || 0;
             if (isCorrect) {
-                // Show green checkmark in input box
-                answerInput.value = '';
-                answerInput.placeholder = '✓';
-                answerInput.classList.add('correct');
+                s.correct++;
                 correctAnswers++;
-                correctStreak++;
-
-                // Up a level after 2 correct in a row (max 4). Going back up into
-                // a level the learner slipped out of this exercise takes 3, so a
-                // learner on the edge of a level does not bounce in and out of it.
-                const needed = droppedFrom.includes(currentDifficulty + 1) ? 3 : 2;
-                if (correctStreak >= needed && currentDifficulty < 4) {
-                    currentDifficulty++;
-                    correctStreak = 0; // Reset streak after difficulty increase
-                }
-            } else {
-                // Show red X in input box
-                answerInput.value = '';
-                answerInput.placeholder = '✗';
-                answerInput.classList.add('incorrect');
-                correctStreak = 0; // Reset streak on wrong answer
-
-                // Decrease difficulty immediately on wrong answer (min 1)
-                if (currentDifficulty > 1) {
-                    if (!droppedFrom.includes(currentDifficulty)) droppedFrom.push(currentDifficulty);
-                    currentDifficulty--;
-                }
+            }
+            if (fluent) s.fluent++;
+            if (!isCorrect) {
+                pendingRetries.push({
+                    operation: selectedOperation,
+                    problem: currentProblemData,
+                    dueAt: currentProblem + 1 + AutomathCore.RETRY_AFTER
+                });
             }
 
-            if (mixedQueue) {
-                saveOpState(selectedOperation);
-                const s = opState[selectedOperation];
-                s.answered++;
-                if (isCorrect) s.correct++;
-                s.ms += sessionHistory[sessionHistory.length - 1].ms || 0;
-                // An operation's last problem is answered: it is finished, so
-                // Compass hears about it now, not only at the end of the set.
-                if (s.answered === totalProblems) finishMixedPart(selectedOperation);
-            }
+            // Mixed runs: an operation's last problem is answered, so it is
+            // finished and Compass hears about it now, not only at the end.
+            if (mixedQueue && s.answered === totalProblems) finishMixedPart(selectedOperation);
 
             setTimeout(() => {
                 currentProblem++;
-                if (currentProblem < problemsInRun()) {
-                    showNextProblem();
-                } else if (mixedQueue) {
-                    showResults();
-                } else {
-                    finishPart();
-                }
-            }, 400);
+                advance();
+            }, wait);
         }
 
-        // One operation's 15 problems are done: tell Compass, then go on to the
-        // next listed operation or to the results.
+        // One operation's 15 problems (and their retries) are done: tell
+        // Compass, then go on to the next listed operation or to the results.
         function finishPart() {
-            reportPart();
-            runParts.push({
-                operation: selectedOperation,
+            const seconds = exerciseSeconds();
+            reportPart({
+                part: selectedOperation,
+                index: compassParts ? partIndex + 1 : 1,
                 correct: correctAnswers,
-                total: totalProblems,
-                seconds: Math.round((Date.now() - startTime) / 1000)
+                fluent: opState[selectedOperation].fluent,
+                seconds,
+                history: sessionHistory
             });
+            runParts.push({ operation: selectedOperation, correct: correctAnswers, total: totalProblems, seconds });
             if (compassParts && partIndex < compassParts.length - 1) {
                 showPartScreen();
             } else {
@@ -906,37 +1090,39 @@
         // times, since the set interleaves them with the other operations).
         function finishMixedPart(op) {
             const s = opState[op];
-            const items = sessionHistory.filter(item => item.operation === op);
             const seconds = Math.round(s.ms / 1000);
             reportPart({
                 part: op,
                 index: compassParts.indexOf(op) + 1,
                 correct: s.correct,
+                fluent: s.fluent,
                 seconds,
-                history: items
+                history: sessionHistory.filter(item => item.operation === op)
             });
             runParts.push({ operation: op, correct: s.correct, total: totalProblems, seconds });
         }
 
-        function reportPart(mixedPart) {
-            const history = mixedPart ? mixedPart.history : sessionHistory;
-            const correct = mixedPart ? mixedPart.correct : correctAnswers;
+        function reportPart(part) {
             const report = {
                 kind: 'part',
-                part: mixedPart ? mixedPart.part : selectedOperation,
-                index: mixedPart ? mixedPart.index : compassParts ? partIndex + 1 : 1,
+                part: part.part,
+                index: part.index,
                 of: compassParts ? compassParts.length : 1,
                 mode: runMode,
                 status: 'finished',
-                correct: correct,
-                wrong: totalProblems - correct,
-                seconds: mixedPart ? mixedPart.seconds : Math.round((Date.now() - startTime) / 1000),
-                items: history.map(item => ({
+                correct: part.correct,
+                wrong: totalProblems - part.correct,
+                fluent: part.fluent,
+                fluentMs: AutomathCore.FLUENT_MS[part.part],
+                seconds: part.seconds,
+                items: part.history.map(item => ({
                     prompt: `${item.num1} ${item.operator} ${item.num2}`,
                     answer: item.userAnswer,
                     correctAnswer: item.correctAnswer,
                     correct: item.isCorrect,
-                    ms: item.ms
+                    fluent: item.fluent,
+                    ms: item.ms,
+                    outlier: item.ms != null && item.ms > AutomathCore.OUTLIER_MS
                 })),
                 appVersion: APP_VERSION
             };
@@ -1066,8 +1252,7 @@
                 // weak operation still shows.
                 restartBtn.classList.add('hidden');
                 document.getElementById('resultsTitle').textContent = 'Mixed practice done ✓';
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                renderScore(document.getElementById('resultsScore'), correctAnswers, problemsInRun(), elapsed);
+                renderScore(document.getElementById('resultsScore'), correctAnswers, problemsInRun(), exerciseSeconds());
                 celebrateIfEarned(correctAnswers, problemsInRun());
                 runParts.sort((a, b) => compassParts.indexOf(a.operation) - compassParts.indexOf(b.operation));
                 renderSummary(false);
@@ -1078,9 +1263,8 @@
                 celebrateIfEarned(part.correct, part.total);
                 renderSummary();
             } else {
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                renderScore(document.getElementById('resultsScore'), correctAnswers, totalProblems, elapsed);
-                celebrateIfEarned(correctAnswers, totalProblems);
+                renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
+                celebrateIfEarned(part.correct, part.total);
             }
             renderReview(document.getElementById('reviewTableBody'), sessionHistory);
         }
@@ -1199,19 +1383,13 @@
             stopFireworks();
             resultsScreen.classList.remove('active');
             startScreen.classList.add('active');
-
             selectedOperation = null;
-            currentDifficulty = 1;
-            correctStreak = 0;
-            droppedFrom = [];
-
-            // Clear problem tracking
-            sessionProblems = [];
-            consecutiveTrivialCount = 0;
-            totalTrivialCount = 0;
-            recentOperands = [];
+            mixedQueue = null;
+            opState = {};
+            pendingRetries = [];
             sessionHistory = [];
             runParts = [];
+            awaitingAnswer = false;
         }
 
         // Compass chose the operations: skip the picker and start the first one.
