@@ -339,9 +339,10 @@ Managed via CSS classes (no routing library):
 - ✅ Compass mode alternates by the learner's local day between grouped operations and one mixed set that interleaves them (Decision 16)
 - ✅ No repeated problems in a session, 2-in-a-row level-up, fireworks above 85% (Decision 17)
 - ✅ Fluency (correct within 3 s) drives levelling up and is reported; misses show the right answer and come back once; level 4 is facts crossing ten; hidden-page time not counted; on-screen number pad on touch screens; `node --test` and a simulator in `tests/` (Decision 18)
+- ✅ Per-fact record across days via Compass (`state` report, `compass_state` launch parameter): sessions aimed at weak and due facts, spaced review, operations graduate and get check-ins (Decision 19)
 
 ### Known Limitations 🔄
-- No progress tracking across sessions (always starts at Level 1)
+- Progress across sessions needs Compass to keep the `state` report and pass it back (app contract 0.4); until it does, and outside Compass, every exercise starts at Level 1
 - Mixed mode exists only in Compass runs (on even local days); the stand-alone picker still runs one operation at a time
 - A mixed set reports its operations only near its end (all four finish in the last round), so a learner who stops partway through a mixed set keeps none of it that visit
 - No keyboard shortcuts for operation selection
@@ -450,7 +451,7 @@ Managed via CSS classes (no routing library):
 6. Verify at `https://<username>.github.io/automath/`
 
 ### Automated Tests
-`node --test` checks the practice rules (the `automath-core` script block) and that `index.html` and `automath.html` match; `node tests/simulate.js` prints how simulated learners move through the levels (add `--accuracy-only` to compare with the rules before Decision 18). Both run in a GitHub Action on every PR.
+`node --test` checks the practice rules (the `automath-core` script block) and that `index.html` and `automath.html` match; `node tests/simulate.js` prints how simulated learners move through the levels (add `--accuracy-only` to compare with the rules before Decision 18). `node tests/simulate-days.js` plays model learners through 180 days of warm-ups with the fact record (Decision 19) and prints when each operation graduates. All three run in a GitHub Action on every PR.
 
 ### Testing Checklist
 - [ ] All four operations generate valid problems
@@ -475,6 +476,11 @@ Managed via CSS classes (no routing library):
 - [ ] Compass run of 2+ operations, grouped (`&mode=grouped` or an odd local day): no "Exercise N of M" line or pills; between operations a large blue "Next: <operation> →" button under the score that takes Enter after 0.6 s; Score, Accuracy and Time in blue, teal and violet, matching the summary columns; each `part` report has `index`, `of` and `mode: "grouped"`
 - [ ] Compass run of 2+ operations, mixed (`&mode=mixed` or an even local day): one set of 15 × the operations, progress line "Mixed · Problem N of 60", never the same operation twice in a row, no screen between operations; each operation reported (`mode: "mixed"`, its own 15 items, `seconds` = sum of its response times) the moment its 15th problem is answered; results screen "Mixed practice done ✓" with the set's score, one row per operation in `compass_parts` order and every problem below
 - [ ] One operation in `compass_parts` always runs grouped
+- [ ] Every Compass run leaves a `kind: "state"` report after each finished operation, with `data`, `due` (an ISO date per operation), `summary` and `fluentMs`
+- [ ] Passing that `data` back as `compass_state` gives fact-chosen sets: the weakest facts come back 2 or 3 times, never within 3 problems of themselves; the results screen shows "<Operation> facts mastered: N of M"
+- [ ] A record with an operation graduated and its check-in in the future: that operation is reported at once with `rest: true` and not asked; with its check-in due: 10 problems, progress line "<Operation> check-in · Problem N of 10", report `check: true`
+- [ ] Every listed operation resting: "Nothing due today ✓", one `rest` report per operation
+- [ ] A damaged `compass_state` is ignored (the level staircase runs, as on a first day)
 
 ---
 

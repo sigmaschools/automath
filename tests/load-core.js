@@ -1,19 +1,33 @@
-// Loads the practice rules (the <script id="automath-core"> block of
-// index.html) into Node, with no browser. Nothing else in the page runs.
+// Loads the practice rules (the <script id="automath-core"> and
+// <script id="automath-facts"> blocks of index.html) into Node, with no
+// browser. Nothing else in the page runs.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 
-function loadCore(file = 'index.html') {
+function block(html, id, file) {
+    const match = html.match(new RegExp(`<script id="${id}">([\\s\\S]*?)<\\/script>`));
+    if (!match) throw new Error(`no ${id} script block in ${file}`);
+    return match[1];
+}
+
+function loadAll(file = 'index.html') {
     const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
-    const match = html.match(/<script id="automath-core">([\s\S]*?)<\/script>/);
-    if (!match) throw new Error(`no automath-core script block in ${file}`);
-    const context = { Math, Set };
+    const context = { Math, Set, Map, Date, Number, String, Object };
     vm.createContext(context);
-    vm.runInContext(`${match[1]}\nthis.AutomathCore = AutomathCore;`, context);
-    return context.AutomathCore;
+    vm.runInContext(`${block(html, 'automath-core', file)}\n${block(html, 'automath-facts', file)}\n`
+        + 'this.AutomathCore = AutomathCore; this.AutomathFacts = AutomathFacts;', context);
+    return { core: context.AutomathCore, facts: context.AutomathFacts };
+}
+
+function loadCore(file = 'index.html') {
+    return loadAll(file).core;
+}
+
+function loadFacts(file = 'index.html') {
+    return loadAll(file).facts;
 }
 
 // A small seeded random number generator, so a failing run can be replayed.
@@ -28,4 +42,4 @@ function seeded(seed) {
     };
 }
 
-module.exports = { loadCore, seeded, ROOT };
+module.exports = { loadCore, loadFacts, seeded, ROOT };

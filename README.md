@@ -115,6 +115,7 @@ open automath.html
 # Run the tests (Node 18+)
 node --test
 node tests/simulate.js
+node tests/simulate-days.js
 
 # Or use a local server
 python3 -m http.server 8000

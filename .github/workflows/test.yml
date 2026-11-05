@@ -17,3 +17,5 @@ jobs:
         run: node --test
       - name: Simulated learners (for the log)
         run: node tests/simulate.js 500
+      - name: Simulated months of warm-ups (for the log)
+        run: node tests/simulate-days.js
