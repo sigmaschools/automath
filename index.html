@@ -140,10 +140,28 @@
 
         .problem-operator {
             position: absolute;
-            left: 0;
+            left: 28px;
             width: 50px;
             text-align: left;
+            color: var(--op-color, #000000);
         }
+
+        /* Each operation has its own color: a bar along the top of the problem
+           card, a light tint behind the numbers, and the sign itself, so a
+           learner sees which operation it is before reading the numbers
+           (Decision 20). The sign keeps the numbers' size and weight. */
+        .problem-container[data-op] {
+            border-top: 8px solid var(--op-color);
+            border-radius: 10px;
+            overflow: hidden;
+            padding-top: 30px;
+            background: linear-gradient(var(--op-tint), #ffffff 45%);
+        }
+
+        .problem-container[data-op="addition"]       { --op-color: #2563eb; --op-tint: #eff6ff; }
+        .problem-container[data-op="subtraction"]    { --op-color: #d97706; --op-tint: #fffbeb; }
+        .problem-container[data-op="multiplication"] { --op-color: #7c3aed; --op-tint: #f5f3ff; }
+        .problem-container[data-op="division"]       { --op-color: #0f766e; --op-tint: #f0fdfa; }
 
 
         .input-container {
@@ -505,7 +523,7 @@
                 <button type="button" data-key="enter" class="key-enter">Enter</button>
             </div>
 
-            <div class="progress" id="progress">Problem 1 of 15</div>
+            <div class="progress" id="progress"></div>
         </div>
 
         <!-- Between parts (only when Compass chose the operations) -->
@@ -714,7 +732,7 @@
                 }
                 if (best.length > 0) return best[Math.floor(rand() * best.length)];
                 // Every problem of this operation has been seen (cannot happen in
-                // 15 problems, but never get stuck): repeat one at this level.
+                // 10 problems, but never get stuck): repeat one at this level.
                 const pool = problemsAt(operation, s.level);
                 return pool[Math.floor(rand() * pool.length)];
             }
@@ -809,7 +827,7 @@
             // every 8 weeks.
             const CHECKIN_DAYS = [7, 14, 28, 56];
             const GRADUATE_SHARE = 0.95;  // of an operation's facts Mastered, and none Learning
-            const SESSION = 15;           // problems per operation on a practice day
+            const SESSION = 10;           // problems per operation on a practice day (Decision 21)
             const CHECKIN = 10;           // problems per operation on a check-in
             const FOCUS_FACTS = 4;        // weakest Learning facts practised in a session
             const MAX_LEARNING = 6;       // no new facts while this many are being learned
@@ -951,6 +969,19 @@
                 f.due = today;
             }
 
+            // A right but slow answer on a Mastered fact (often rust after days
+            // away) steps it down to Fluent, not all the way to Learning: it is
+            // asked again the next day, and one fast answer then makes it
+            // Mastered again (Decision 22). A wrong answer is still a slip.
+            function rust(f, today) {
+                f.x = Math.min(3, f.x + 1);
+                f.s = FLUENT;
+                f.d = 2;
+                f.i = 0;
+                f.w = Math.min(15, f.w + 1);
+                f.due = today + 1;
+            }
+
             // One scored answer. Retries of a missed problem are not recorded.
             function recordAnswer(rec, op, key, correct, ms, today) {
                 const idx = INDEX[op].get(key);
@@ -961,7 +992,7 @@
                     rec.typing = rec.typing == null ? ms : Math.round(rec.typing * 0.7 + ms * 0.3);
                 }
                 if (!correct) return slip(f, today, 4);
-                if (!fluent) return slip(f, today, 2);
+                if (!fluent) return f.s === MASTERED ? rust(f, today) : slip(f, today, 2);
                 f.w = Math.max(0, f.w - 3);
                 if (f.s === UNSEEN) {
                     // Fast and right on first sight: the fact was known before
@@ -1034,7 +1065,7 @@
                 return out;
             }
 
-            // A practice day: about 8 asks of the weakest Learning facts, the
+            // A practice day: about 6 asks of the weakest Learning facts, the
             // reviews that are due, a few new facts while few are being learned,
             // and known facts to fill.
             function planSession(rec, op, today, rand = Math.random) {
@@ -1057,7 +1088,11 @@
 
                 const learning = shuffle(all.filter(i => facts[i].s === LEARNING), rand)
                     .sort((a, b) => facts[b].w - facts[a].w);
-                learning.slice(0, FOCUS_FACTS).forEach(i => take(i, facts[i].w >= 8 ? 3 : 2));
+                // Focus asks leave at least 4 places for reviews and new facts.
+                learning.slice(0, FOCUS_FACTS).forEach(i => {
+                    const room = SESSION - 4 - picks.length;
+                    if (room >= 2) take(i, Math.min(room, facts[i].w >= 8 ? 3 : 2));
+                });
 
                 // Fluent facts waiting to be confirmed come before Mastered ones;
                 // within each, the longest overdue first. While facts are still
@@ -1190,7 +1225,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.6.0';
+        const APP_VERSION = '1.7.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
@@ -1223,8 +1258,8 @@
         const restingParts = (listedParts || []).filter(op => partKinds[op] === 'rest');
         const compassParts = listedParts ? listedParts.filter(op => partKinds[op] !== 'rest') : null;
         // How a Compass run of two or more operations is laid out: `grouped` runs
-        // them one after another (15 problems each); `mixed` interleaves them in
-        // one set (15 of each, every operation once per round in a random order,
+        // them one after another (10 problems each); `mixed` interleaves them in
+        // one set (10 of each, every operation once per round in a random order,
         // never the same operation twice in a row). The two alternate by the
         // learner's local day: even days mixed, odd days grouped. `mode=mixed` or
         // `mode=grouped` in the URL forces one (for testing).
@@ -1253,7 +1288,7 @@
 
         let selectedOperation = null;
         let currentProblem = 0; // scored problems answered so far in this exercise
-        const totalProblems = 15;
+        const totalProblems = AutomathFacts.SESSION;
         let correctAnswers = 0;
         let startTime = null;
         let currentProblemData = null;
@@ -1296,6 +1331,7 @@
         const problemNum1El = document.getElementById('problemNum1');
         const problemNum2El = document.getElementById('problemNum2');
         const problemOpEl = document.getElementById('problemOp');
+        const problemContainerEl = document.querySelector('#practiceScreen .problem-container');
         const answerInput = document.getElementById('answer');
         const answerMark = document.getElementById('answerMark');
         const progressEl = document.getElementById('progress');
@@ -1434,6 +1470,7 @@
             currentProblemData = problem;
             problemNum1El.textContent = problem.num1;
             problemOpEl.textContent = problem.operator;
+            problemContainerEl.dataset.op = selectedOperation;
             problemNum2El.textContent = problem.num2;
             answerInput.value = '';
             answerInput.placeholder = '?';
@@ -1524,7 +1561,7 @@
             }, wait);
         }
 
-        // One operation's 15 problems (and their retries) are done: tell
+        // One operation's 10 problems (and their retries) are done: tell
         // Compass, then go on to the next listed operation or to the results.
         function finishPart() {
             const seconds = exerciseSeconds();
@@ -1546,7 +1583,7 @@
             }
         }
 
-        // Mixed runs: one operation's 15 problems are answered. Its score and
+        // Mixed runs: one operation's 10 problems are answered. Its score and
         // time are its own problems only (time is the sum of their response
         // times, since the set interleaves them with the other operations).
         function finishMixedPart(op) {

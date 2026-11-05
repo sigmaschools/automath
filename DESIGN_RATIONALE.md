@@ -628,6 +628,30 @@ The picker also changed in one way the tests found: a level-1 learner who stayed
 
 **Known limits**: changing any level's problems changes the fact table and needs a new record format (`FORMAT`); `tests/facts.test.js` fails until it is bumped. Facts practised in the main math app are not counted as review, since Compass cannot see them. The `due` date is the device's local day, like Decision 16.
 
+### Decision 20: A Color for Each Operation (5 November 2026)
+
+**Decision**: The problem sits on a card colored by its operation: a bar along the top, a light tint behind the numbers, and the sign in the same color. Addition is blue (#2563eb), subtraction amber (#d97706), multiplication purple (#7c3aed), division teal (#0f766e). The sign keeps the numbers' size and weight, and there is no word label. The sign moves 28 px in from the card's left edge; the answer box still runs the card's full width. App version 1.7.0.
+
+**Why**: in a mixed run (Decision 16) almost every problem changes operation, and a tester answered several with the wrong one (adding instead of dividing). The thin black signs at the numbers' weight made + and ÷ look alike at a glance. Color tells the operations apart before the numbers are read, and each sign still has its own shape, so a colorblind learner loses nothing. Noticing the operation is part of what mixed practice trains; the color makes the sign easy to see, it does not answer the problem.
+
+**Alternatives considered**: a larger, bold sign and a word label ("Add", "Divide") above the problem, both tried in a mockup and dropped by the tester as unnecessary once color was there; a flash when the operation changes (it would fire on nearly every mixed problem).
+
+### Decision 21: 10 Problems per Operation (5 November 2026)
+
+**Decision**: A practice day is 10 problems per operation instead of 15, so a mixed day with all four operations is 40 problems instead of 60 (plus retried misses). The staircase without a record gives 10 too. Focus facts (Decision 19) now take at most 6 places, so at least 4 are left for reviews and new facts. Check-ins stay at 10. App version 1.7.0.
+
+**Why**: a tester found a 60-problem mixed day too long for a warm-up meant to take about 5 minutes.
+
+**Cost**: fewer asks a day means slower progress through the fact table. In `node tests/simulate-days.js`, the learner who knows almost every fact graduates on days 62, 99, 49 and 87 (+, −, ×, ÷; was 34, 58, 32, 46), and the learner weak on the 8s and 9s on days 78, 100, 102 and 116 (was 37, 64, 71, 67). The slowest model learner graduates only multiplication within 180 days. If that is too slow, the next levers are more new facts per day or fewer known-fact fillers, not a longer day.
+
+### Decision 22: A Slow Answer Steps a Mastered Fact Down, Not Back (5 November 2026)
+
+**Decision**: A right but slow answer on a Mastered fact makes it Fluent again, with two days' credit, due the next day. One fast answer then makes it Mastered again. A wrong answer is still a slip back to Learning (Decision 19), and so is a slow answer on a fact that is not yet Mastered. Either way the fact counts as having slipped before, so its later reviews come sooner. App version 1.7.0.
+
+**Why**: the first answer after days away (a vacation, a weekend, an illness) is often a little slow even when the fact is known. Under Decision 19 that one answer wiped out all of the fact's credit, so a learner would have to re-earn mastery over three more days. Being slow but right is weaker evidence of forgetting than being wrong, so it gets a smaller step back. Nothing in the model expires during an absence: "3 separate days" never needed consecutive days, and a review is due *on or after* its date.
+
+**Simulation** (`node tests/simulate-days.js`, at 10 problems per operation): the learner who knows almost every fact graduates on days 55, 91, 48 and 73 (was 62, 99, 49, 87 at 10 problems without this rule); the learner weak on the 8s and 9s on days 71, 103, 97 and 105 (was 78, 100, 102, 116).
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

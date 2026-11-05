@@ -50,7 +50,7 @@ test('a record survives the trip through Compass unchanged, and a damaged one is
     assert.equal(F.decode('9' + text.slice(1)), null, 'an unknown format is refused');
 });
 
-test('a fact moves Unseen → Learning → Fluent → Mastered, and a slip sends it back', () => {
+test('a fact moves Unseen → Learning → Fluent → Mastered, and a miss sends it back', () => {
     const rec = F.create(DAY);
     const op = 'multiplication';
     const key = core.normalizeProblem(8, 7, '×');
@@ -74,9 +74,28 @@ test('a fact moves Unseen → Learning → Fluent → Mastered, and a slip sends
     assert.equal(f.s, F.MASTERED, 'fluent on 3 separate days');
     const gap = f.due - (DAY + 1 + 3);
     assert.ok(gap >= 7, `next review ${gap} days on`);
-    F.recordAnswer(rec, op, key, true, SLOW, f.due);
-    assert.equal(f.s, F.LEARNING, 'slow counts as a slip');
+    F.recordAnswer(rec, op, key, false, FAST, f.due);
+    assert.equal(f.s, F.LEARNING, 'a wrong answer is a slip');
     assert.equal(f.x, 1);
+});
+
+test('a slow answer on a mastered fact steps it down to Fluent; one fast answer the next day restores it', () => {
+    const rec = F.create(DAY);
+    const op = 'multiplication';
+    const key = core.normalizeProblem(8, 7, '×');
+    const f = factOf(rec, op, key);
+    f.s = F.MASTERED; f.d = 3; f.i = 4; f.due = DAY;
+    // Back from a week away: right, but slow.
+    F.recordAnswer(rec, op, key, true, SLOW, DAY + 7);
+    assert.equal(f.s, F.FLUENT, 'not sent back to Learning');
+    assert.equal(f.due, DAY + 8, 'asked again the next day');
+    assert.equal(f.x, 1);
+    F.recordAnswer(rec, op, key, true, FAST, DAY + 8);
+    assert.equal(f.s, F.MASTERED);
+    // Slow on a Fluent fact is still a slip.
+    f.s = F.FLUENT; f.d = 1; f.due = DAY + 9;
+    F.recordAnswer(rec, op, key, true, SLOW, DAY + 9);
+    assert.equal(f.s, F.LEARNING);
 });
 
 test('fast and right on first sight counts as two days; one more later day masters it', () => {
@@ -114,7 +133,7 @@ test('a slow typist is judged against their own typing speed, within limits', ()
     assert.equal(F.fluentLimit(rec), 6000, 'never more than 6 s');
 });
 
-test('a practice day: 15 problems, the weakest facts 2 or 3 times and apart, few rule facts', () => {
+test('a practice day: 10 problems, the weakest facts 2 or 3 times and apart, few rule facts', () => {
     const rand = seeded(4);
     for (let run = 0; run < 200; run++) {
         const rec = F.create(DAY);
@@ -127,10 +146,10 @@ test('a practice day: 15 problems, the weakest facts 2 or 3 times and apart, few
             else { x.s = F.MASTERED; x.d = 3; x.i = 3; x.due = DAY + 1 + Math.floor(rand() * 20); }
         });
         const plan = F.planSession(rec, op, DAY, rand);
-        assert.equal(plan.length, 15);
+        assert.equal(plan.length, F.SESSION);
         const keys = plan.map(p => p.key);
         const weakAsked = keys.filter(k => factOf(rec, op, k).s === F.LEARNING);
-        assert.ok(weakAsked.length >= 8, `only ${weakAsked.length} weak asks`);
+        assert.ok(weakAsked.length >= 6, `only ${weakAsked.length} weak asks`);
         assert.ok(new Set(weakAsked).size <= 4, 'at most 4 focus facts a day');
         for (let i = 0; i < keys.length; i++) {
             for (let j = i + 1; j < Math.min(keys.length, i + 3); j++) {
@@ -149,7 +168,7 @@ test('a first practice day introduces the easiest facts first', () => {
     const rec = F.create(DAY);
     for (const op of F.OPS) {
         const plan = F.planSession(rec, op, DAY, seeded(5));
-        assert.equal(plan.length, 15);
+        assert.equal(plan.length, F.SESSION);
         assert.ok(plan.every(p => F.TABLE[op].find(f => f.key === p.key).tier <= 2), op);
     }
 });
