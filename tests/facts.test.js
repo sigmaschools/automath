@@ -114,7 +114,7 @@ test('a slow typist is judged against their own typing speed, within limits', ()
     assert.equal(F.fluentLimit(rec), 6000, 'never more than 6 s');
 });
 
-test('a practice day: 15 problems, the weakest facts 2 or 3 times and apart, few rule facts', () => {
+test('a practice day: 10 problems, the weakest facts 2 or 3 times and apart, few rule facts', () => {
     const rand = seeded(4);
     for (let run = 0; run < 200; run++) {
         const rec = F.create(DAY);
@@ -127,10 +127,10 @@ test('a practice day: 15 problems, the weakest facts 2 or 3 times and apart, few
             else { x.s = F.MASTERED; x.d = 3; x.i = 3; x.due = DAY + 1 + Math.floor(rand() * 20); }
         });
         const plan = F.planSession(rec, op, DAY, rand);
-        assert.equal(plan.length, 15);
+        assert.equal(plan.length, F.SESSION);
         const keys = plan.map(p => p.key);
         const weakAsked = keys.filter(k => factOf(rec, op, k).s === F.LEARNING);
-        assert.ok(weakAsked.length >= 8, `only ${weakAsked.length} weak asks`);
+        assert.ok(weakAsked.length >= 6, `only ${weakAsked.length} weak asks`);
         assert.ok(new Set(weakAsked).size <= 4, 'at most 4 focus facts a day');
         for (let i = 0; i < keys.length; i++) {
             for (let j = i + 1; j < Math.min(keys.length, i + 3); j++) {
@@ -149,7 +149,7 @@ test('a first practice day introduces the easiest facts first', () => {
     const rec = F.create(DAY);
     for (const op of F.OPS) {
         const plan = F.planSession(rec, op, DAY, seeded(5));
-        assert.equal(plan.length, 15);
+        assert.equal(plan.length, F.SESSION);
         assert.ok(plan.every(p => F.TABLE[op].find(f => f.key === p.key).tier <= 2), op);
     }
 });

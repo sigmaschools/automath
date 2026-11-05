@@ -67,7 +67,7 @@ Before implementing any change, ask:
 **Key characteristics:**
 - Single HTML file (zero dependencies)
 - Adaptive progressive difficulty (4 levels)
-- 15 problems per operation
+- 10 problems per operation (Decision 21)
 - No timers during practice (reduces anxiety)
 - Clean, minimal UI (black text on white)
 - ~2-4 minute sessions per operation

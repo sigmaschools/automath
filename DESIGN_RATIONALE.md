@@ -636,6 +636,14 @@ The picker also changed in one way the tests found: a level-1 learner who stayed
 
 **Alternatives considered**: a larger, bold sign and a word label ("Add", "Divide") above the problem, both tried in a mockup and dropped by the tester as unnecessary once color was there; a flash when the operation changes (it would fire on nearly every mixed problem).
 
+### Decision 21: 10 Problems per Operation (5 November 2026)
+
+**Decision**: A practice day is 10 problems per operation instead of 15, so a mixed day with all four operations is 40 problems instead of 60 (plus retried misses). The staircase without a record gives 10 too. Focus facts (Decision 19) now take at most 6 places, so at least 4 are left for reviews and new facts. Check-ins stay at 10. App version 1.7.0.
+
+**Why**: a tester found a 60-problem mixed day too long for a warm-up meant to take about 5 minutes.
+
+**Cost**: fewer asks a day means slower progress through the fact table. In `node tests/simulate-days.js`, the learner who knows almost every fact graduates on days 62, 99, 49 and 87 (+, −, ×, ÷; was 34, 58, 32, 46), and the learner weak on the 8s and 9s on days 78, 100, 102 and 116 (was 37, 64, 71, 67). The slowest model learner graduates only multiplication within 180 days. If that is too slow, the next levers are more new facts per day or fewer known-fact fillers, not a longer day.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

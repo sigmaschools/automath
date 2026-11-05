@@ -523,7 +523,7 @@
                 <button type="button" data-key="enter" class="key-enter">Enter</button>
             </div>
 
-            <div class="progress" id="progress">Problem 1 of 15</div>
+            <div class="progress" id="progress"></div>
         </div>
 
         <!-- Between parts (only when Compass chose the operations) -->
@@ -732,7 +732,7 @@
                 }
                 if (best.length > 0) return best[Math.floor(rand() * best.length)];
                 // Every problem of this operation has been seen (cannot happen in
-                // 15 problems, but never get stuck): repeat one at this level.
+                // 10 problems, but never get stuck): repeat one at this level.
                 const pool = problemsAt(operation, s.level);
                 return pool[Math.floor(rand() * pool.length)];
             }
@@ -827,7 +827,7 @@
             // every 8 weeks.
             const CHECKIN_DAYS = [7, 14, 28, 56];
             const GRADUATE_SHARE = 0.95;  // of an operation's facts Mastered, and none Learning
-            const SESSION = 15;           // problems per operation on a practice day
+            const SESSION = 10;           // problems per operation on a practice day (Decision 21)
             const CHECKIN = 10;           // problems per operation on a check-in
             const FOCUS_FACTS = 4;        // weakest Learning facts practised in a session
             const MAX_LEARNING = 6;       // no new facts while this many are being learned
@@ -1052,7 +1052,7 @@
                 return out;
             }
 
-            // A practice day: about 8 asks of the weakest Learning facts, the
+            // A practice day: about 6 asks of the weakest Learning facts, the
             // reviews that are due, a few new facts while few are being learned,
             // and known facts to fill.
             function planSession(rec, op, today, rand = Math.random) {
@@ -1075,7 +1075,11 @@
 
                 const learning = shuffle(all.filter(i => facts[i].s === LEARNING), rand)
                     .sort((a, b) => facts[b].w - facts[a].w);
-                learning.slice(0, FOCUS_FACTS).forEach(i => take(i, facts[i].w >= 8 ? 3 : 2));
+                // Focus asks leave at least 4 places for reviews and new facts.
+                learning.slice(0, FOCUS_FACTS).forEach(i => {
+                    const room = SESSION - 4 - picks.length;
+                    if (room >= 2) take(i, Math.min(room, facts[i].w >= 8 ? 3 : 2));
+                });
 
                 // Fluent facts waiting to be confirmed come before Mastered ones;
                 // within each, the longest overdue first. While facts are still
@@ -1241,8 +1245,8 @@
         const restingParts = (listedParts || []).filter(op => partKinds[op] === 'rest');
         const compassParts = listedParts ? listedParts.filter(op => partKinds[op] !== 'rest') : null;
         // How a Compass run of two or more operations is laid out: `grouped` runs
-        // them one after another (15 problems each); `mixed` interleaves them in
-        // one set (15 of each, every operation once per round in a random order,
+        // them one after another (10 problems each); `mixed` interleaves them in
+        // one set (10 of each, every operation once per round in a random order,
         // never the same operation twice in a row). The two alternate by the
         // learner's local day: even days mixed, odd days grouped. `mode=mixed` or
         // `mode=grouped` in the URL forces one (for testing).
@@ -1271,7 +1275,7 @@
 
         let selectedOperation = null;
         let currentProblem = 0; // scored problems answered so far in this exercise
-        const totalProblems = 15;
+        const totalProblems = AutomathFacts.SESSION;
         let correctAnswers = 0;
         let startTime = null;
         let currentProblemData = null;
@@ -1544,7 +1548,7 @@
             }, wait);
         }
 
-        // One operation's 15 problems (and their retries) are done: tell
+        // One operation's 10 problems (and their retries) are done: tell
         // Compass, then go on to the next listed operation or to the results.
         function finishPart() {
             const seconds = exerciseSeconds();
@@ -1566,7 +1570,7 @@
             }
         }
 
-        // Mixed runs: one operation's 15 problems are answered. Its score and
+        // Mixed runs: one operation's 10 problems are answered. Its score and
         // time are its own problems only (time is the sum of their response
         // times, since the set interleaves them with the other operations).
         function finishMixedPart(op) {

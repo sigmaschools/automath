@@ -37,7 +37,7 @@ for (const learner of LEARNERS) {
         for (let run = 0; run < RUNS; run++) {
             const s = core.newState();
             const seen = new Set();
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 10; i++) {
                 const problem = core.pickProblem(op, s, rand);
                 core.recordShown(s, problem, op);
                 const key = core.normalizeProblem(problem.num1, problem.num2, problem.operator);
@@ -67,5 +67,5 @@ for (const learner of LEARNERS) {
         repeats
     });
 }
-console.log(`${ACCURACY_ONLY ? 'Accuracy only. ' : ''}${RUNS} exercises of 15 problems per operation per learner`);
+console.log(`${ACCURACY_ONLY ? 'Accuracy only. ' : ''}${RUNS} exercises of 10 problems per operation per learner`);
 console.table(rows);
