@@ -112,13 +112,13 @@ Edit the `problemsAt()` function in automath.html (each level lists every proble
 Edit `totalProblems` variable (line ~260) and update HTML placeholder (line ~209)
 
 ### Adjusting Progression Speed
-Edit the streak requirement (`needed`) in `checkAnswer()`
+Edit the streak requirement (`needed`) in `recordAnswer()` in the `automath-core` script block, then run `node --test` and `node tests/simulate.js`
 
 ## Key Implementation Details
 
 **Adaptive Difficulty:**
 - 4 levels (1-4), start at Level 1
-- Advance: 2 consecutive correct answers (3 to re-enter a level slipped out of this exercise)
+- Advance: 2 fluent correct answers in a row, fluent = within 3 s (3 to re-enter a level slipped out of this exercise)
 - Regress: Immediately on wrong answer
 - Session: 15 problems (enough to reach Level 4 and practice there)
 
@@ -126,7 +126,7 @@ Edit the streak requirement (`needed`) in `checkAnswer()`
 - Level 1: Facts within 5 (addition/subtraction), 0-2× tables (mult/div)
 - Level 2: Facts within 10, 0-5× tables
 - Level 3: Facts within 20, 0-10× tables
-- Level 4: Two-digit ≤75, 0-12× tables (K-5 curriculum cap)
+- Level 4: Addition/subtraction facts crossing ten (8 + 7, 13 − 6), 0-12× tables
 
 **UX Flow:**
 1. Click operation → immediate practice start

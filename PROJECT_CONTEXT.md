@@ -54,7 +54,8 @@
 **Implementation Details**:
 ```javascript
 // 4 difficulty levels (1-4)
-// Progression: +1 level after 2 consecutive correct answers
+// Progression: +1 level after 2 fluent correct answers in a row (correct within 3 s;
+//   a slow correct answer neither builds nor breaks the streak, Decision 18)
 //   (3 to climb back into a level slipped out of earlier in the exercise)
 // Regression: -1 level immediately after any wrong answer
 // Session: 15 problems (level 4 can be reached by problem 7: 2+2+2)
@@ -64,8 +65,8 @@
 
 | Operation | Level 1 | Level 2 | Level 3 | Level 4 |
 |-----------|---------|---------|---------|---------|
-| Addition | Facts ≤5 | Facts ≤10 | Facts ≤20 | 2-digit ≤75 |
-| Subtraction | Facts ≤5 | Facts ≤10 | Facts ≤20 | 2-digit ≤75 |
+| Addition | Facts ≤5 | Facts ≤10 | Facts ≤20 | Facts crossing ten (8 + 7) |
+| Subtraction | Facts ≤5 | Facts ≤10 | Facts ≤20 | Facts crossing ten (13 − 6) |
 | Multiplication | 0-2× tables | 0-5× tables | 0-10× tables | 0-12× tables |
 | Division | 0-2÷ tables | 0-5÷ tables | 0-10÷ tables | 0-12÷ tables |
 
@@ -337,6 +338,7 @@ Managed via CSS classes (no routing library):
 - ✅ Compass mode shows a large blue Next button between operations and colored score values (Decision 14); the "Exercise N of M" pills were removed again (Decision 15)
 - ✅ Compass mode alternates by the learner's local day between grouped operations and one mixed set that interleaves them (Decision 16)
 - ✅ No repeated problems in a session, 2-in-a-row level-up, fireworks above 85% (Decision 17)
+- ✅ Fluency (correct within 3 s) drives levelling up and is reported; misses show the right answer and come back once; level 4 is facts crossing ten; hidden-page time not counted; on-screen number pad on touch screens; `node --test` and a simulator in `tests/` (Decision 18)
 
 ### Known Limitations 🔄
 - No progress tracking across sessions (always starts at Level 1)
@@ -446,6 +448,9 @@ Managed via CSS classes (no routing library):
 4. Push: `git push -u origin claude/create-automath-app-icRFe`
 5. Wait 1-2 minutes for GitHub Pages deploy
 6. Verify at `https://<username>.github.io/automath/`
+
+### Automated Tests
+`node --test` checks the practice rules (the `automath-core` script block) and that `index.html` and `automath.html` match; `node tests/simulate.js` prints how simulated learners move through the levels (add `--accuracy-only` to compare with the rules before Decision 18). Both run in a GitHub Action on every PR.
 
 ### Testing Checklist
 - [ ] All four operations generate valid problems

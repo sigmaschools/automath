@@ -25,7 +25,7 @@ Automath is designed around a single guiding principle: **Build automaticity thr
 - Start easy (Level 1: facts within 5)
 - Progress only when ready (3 consecutive correct answers)
 - Immediate support when struggling (difficulty drops on wrong answer)
-- Ceiling appropriate for age group (Level 4 caps at 12× tables and 2-digit arithmetic)
+- Ceiling appropriate for age group (Level 4 caps at 12× tables and the addition and subtraction facts that cross ten)
 
 **3. Rapid Feedback Loops**
 - Immediate visual feedback (✓ or ✗)
@@ -258,7 +258,7 @@ Automath implements the core principles in a simplified, single-session context 
 **Decision**: Cap maximum difficulty at Level 4, appropriate for K-5 curriculum.
 
 **Level 4 Targets**:
-- Addition/Subtraction: Two-digit numbers within 75
+- Addition/Subtraction: Two-digit numbers within 75 (*replaced by Decision 18: the facts within 20 that cross ten*)
 - Multiplication/Division: Up to 12× tables (standard curriculum endpoint)
 
 **Rationale**:
@@ -584,6 +584,28 @@ Decided with the product owner on 3 November 2026.
 **Why (fireworks)**: a clear, earned celebration for an exercise done well, in the spirit of an end-of-level fireworks burst. It appears only on the score screen, after practice, so it cannot distract from a problem, and it adds no pressure during practice. This is a deliberate exception to "no animations" (Minimal UI Design).
 
 **Alternatives considered**: pre-generating the whole session (Decision 10's option 2; the per-problem picker keeps adaptive difficulty simple); allowing a missed fact to come back later in the session (useful retrieval practice, but the product owner asked for no repeats); fireworks at 80% (12/15 would earn them, which makes them less special).
+
+### Decision 18: Fluency Counts, Misses Are Corrected, Facts Only (5 November 2026)
+
+**Decision**: Five changes from a review of the app against fact-fluency research, none of which needs anything from Compass. App version 1.5.0.
+
+1. **Fluent = correct and fast.** A correct answer given within 3 seconds (`FLUENT_MS`, per operation) is *fluent*. Only fluent answers build the streak that moves a learner up a level; a correct but slow answer neither builds nor breaks it, and a wrong answer still drops one level. The learner never sees a timer or the threshold: a slow correct answer gets the same green tick. Each `part` report adds `fluent` (fluent answers out of 15) and `fluentMs` (the threshold), and each item adds `fluent`.
+2. **Every miss is corrected.** After a wrong answer the right answer appears in the answer box, in dark text on the red box with a red ✗ beside it, for 1.5 s. The same problem then comes back once, 3 problems later ("Try this one again" on the progress line), or at the end of the exercise if fewer than 3 are left. The retry is not scored, does not move the level, and is not in the report or the review table; the original miss is. This is a narrow exception to Decision 17's no-repeat rule: only a missed problem comes back, and only once.
+3. **Facts only.** Level 4 of addition is now the single-digit facts that cross ten (8 + 7; 36 of them, 20 once 7 + 8 and 8 + 7 count as one), and level 4 of subtraction their inverses (13 − 6; 36 facts), replacing two-digit sums within 75 (Decision 5). Level 3 addition is capped at 20; before, 45 of its 150 problems went over 20 (up to 19 + 10).
+4. **Cleaner response times and a number pad.** Time spent with the page hidden (another tab, the device asleep) no longer counts towards a problem's `ms` or the exercise time, and items over 30 s are marked `outlier: true` in the report. On touch screens a 0–9 pad with ⌫ and Enter sits under the problem and the device keyboard stays down (`inputmode="none"`); `keypad=1` or `keypad=0` in the URL forces it on or off.
+5. **Tests.** The practice rules moved into their own `<script id="automath-core">` block with no page code, so `node --test` can check them without a browser (`tests/`), and `node tests/simulate.js` plays simulated learners through them. A GitHub Action runs both on every PR, and fails when `index.html` and `automath.html` differ.
+
+The picker also changed in one way the tests found: a level-1 learner who stayed there all exercise could run out of ×2 facts and get a run of ×0 and ×1 problems (multiplication or division broke the trivial limits in about 30% of such exercises). The picker now weighs every unseen problem by its distance from the learner's level as well as the soft rules, so a trivial problem the limits forbid is replaced by a fresh one from the next level up.
+
+**Why (fluency)**: automaticity is fast, effortless recall. A learner who counts on their fingers gets the answer right, so accuracy alone could not tell that apart from recall, and the app moved such a learner up to harder facts while the easy ones were still slow. Mastery for facts needs speed as well as accuracy (Learning-science principles 6 and 11). Keeping the threshold hidden keeps Decision 4: no timer pressure during practice. In simulation (`node tests/simulate.js`, compared with `--accuracy-only`), a learner who knows level 3 but recalls slowly now practises at an average level of 1.7 instead of 2.9 and gets 94% right instead of 86%: they stay on the facts they know until those are fast. A learner who is fast through level 4 is barely affected (average level 3.1 either way).
+
+**Why (corrections)**: a red ✗ alone tells the learner they were wrong, not what is right; the right answer was only in the review table at the end, which a learner can skip. Seeing the correct fact and then producing it again a few problems later is what turns a miss into learning (principle 13). Open Question 5 had already leaned this way ("showing correct answer after wrong response could support learning").
+
+**Why (facts only)**: two-digit sums are worked out, not recalled, so they cannot become automatic in this sense, and their long response times would hide the fluency signal. The facts that cross ten are the ones students most often stay slow on.
+
+**Alternatives considered**: showing a timer or a speed score (rejected by Decision 4); making a slow answer reset the streak (it punishes a learner for something they cannot see); a lower threshold for young learners (needs Compass to say who is young, a later change); keeping two-digit sums as an optional exercise (possible later as its own app or mode).
+
+**Later, with Compass**: starting each learner at their last level, per-fact practice and review across days, dropping fluent operations from the daily warm-up, and a fluency report for guides. All of these build on the `fluent` data added here.
 
 ## Lessons Learned
 
