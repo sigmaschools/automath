@@ -140,10 +140,28 @@
 
         .problem-operator {
             position: absolute;
-            left: 0;
+            left: 28px;
             width: 50px;
             text-align: left;
+            color: var(--op-color, #000000);
         }
+
+        /* Each operation has its own color: a bar along the top of the problem
+           card, a light tint behind the numbers, and the sign itself, so a
+           learner sees which operation it is before reading the numbers
+           (Decision 20). The sign keeps the numbers' size and weight. */
+        .problem-container[data-op] {
+            border-top: 8px solid var(--op-color);
+            border-radius: 10px;
+            overflow: hidden;
+            padding-top: 30px;
+            background: linear-gradient(var(--op-tint), #ffffff 45%);
+        }
+
+        .problem-container[data-op="addition"]       { --op-color: #2563eb; --op-tint: #eff6ff; }
+        .problem-container[data-op="subtraction"]    { --op-color: #d97706; --op-tint: #fffbeb; }
+        .problem-container[data-op="multiplication"] { --op-color: #7c3aed; --op-tint: #f5f3ff; }
+        .problem-container[data-op="division"]       { --op-color: #0f766e; --op-tint: #f0fdfa; }
 
 
         .input-container {
@@ -1190,7 +1208,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.6.0';
+        const APP_VERSION = '1.7.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
@@ -1296,6 +1314,7 @@
         const problemNum1El = document.getElementById('problemNum1');
         const problemNum2El = document.getElementById('problemNum2');
         const problemOpEl = document.getElementById('problemOp');
+        const problemContainerEl = document.querySelector('#practiceScreen .problem-container');
         const answerInput = document.getElementById('answer');
         const answerMark = document.getElementById('answerMark');
         const progressEl = document.getElementById('progress');
@@ -1434,6 +1453,7 @@
             currentProblemData = problem;
             problemNum1El.textContent = problem.num1;
             problemOpEl.textContent = problem.operator;
+            problemContainerEl.dataset.op = selectedOperation;
             problemNum2El.textContent = problem.num2;
             answerInput.value = '';
             answerInput.placeholder = '?';

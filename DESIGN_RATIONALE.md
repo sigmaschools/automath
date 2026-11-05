@@ -628,6 +628,14 @@ The picker also changed in one way the tests found: a level-1 learner who stayed
 
 **Known limits**: changing any level's problems changes the fact table and needs a new record format (`FORMAT`); `tests/facts.test.js` fails until it is bumped. Facts practised in the main math app are not counted as review, since Compass cannot see them. The `due` date is the device's local day, like Decision 16.
 
+### Decision 20: A Color for Each Operation (5 November 2026)
+
+**Decision**: The problem sits on a card colored by its operation: a bar along the top, a light tint behind the numbers, and the sign in the same color. Addition is blue (#2563eb), subtraction amber (#d97706), multiplication purple (#7c3aed), division teal (#0f766e). The sign keeps the numbers' size and weight, and there is no word label. The sign moves 28 px in from the card's left edge; the answer box still runs the card's full width. App version 1.7.0.
+
+**Why**: in a mixed run (Decision 16) almost every problem changes operation, and a tester answered several with the wrong one (adding instead of dividing). The thin black signs at the numbers' weight made + and ÷ look alike at a glance. Color tells the operations apart before the numbers are read, and each sign still has its own shape, so a colorblind learner loses nothing. Noticing the operation is part of what mixed practice trains; the color makes the sign easy to see, it does not answer the problem.
+
+**Alternatives considered**: a larger, bold sign and a word label ("Add", "Divide") above the problem, both tried in a mockup and dropped by the tester as unnecessary once color was there; a flash when the operation changes (it would fire on nearly every mixed problem).
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
