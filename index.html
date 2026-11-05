@@ -328,6 +328,18 @@
             display: none;
         }
 
+        /* Facts mastered so far (Compass runs with a fact record, Decision 19) */
+        .mastery {
+            font-size: 17px;
+            color: #555555;
+            margin-top: 14px;
+            line-height: 1.6;
+        }
+
+        .mastery:empty {
+            display: none;
+        }
+
         .part-left {
             font-size: 18px;
             color: #666666;
@@ -500,6 +512,7 @@
         <div id="partScreen" class="screen">
             <h2 id="partDoneTitle">Done</h2>
             <div class="results" id="partScore"></div>
+            <div class="mastery" id="partMastery"></div>
             <button id="nextPartBtn">Next</button>
             <div class="next-hint">or press Enter</div>
             <div class="part-left" id="partLeft"></div>
@@ -538,6 +551,8 @@
                     <div class="result-value" id="timeResult">0:00</div>
                 </div>
             </div>
+
+            <div class="mastery" id="resultsMastery"></div>
 
             <!-- Compass runs: one row per operation in this visit -->
             <table class="review-table summary-table hidden" id="summaryTable">
@@ -742,19 +757,27 @@
                 }
             }
 
-            // Mixed runs: `rounds` rounds, each with every operation once in a
-            // random order, never the same operation twice in a row.
-            function buildMixedQueue(parts, rounds, rand = Math.random) {
+            // Mixed runs: rounds of every operation once in a random order,
+            // never the same operation twice in a row. `counts` is the number of
+            // problems for every operation, or one number per operation (a
+            // check-in is shorter than a practice set); an operation whose
+            // problems are used up drops out of the later rounds.
+            function buildMixedQueue(parts, counts, rand = Math.random) {
+                const left = {};
+                parts.forEach(p => { left[p] = typeof counts === 'number' ? counts : counts[p]; });
                 const queue = [];
-                for (let round = 0; round < rounds; round++) {
+                for (;;) {
+                    const round = parts.filter(p => left[p] > 0);
+                    if (round.length === 0) break;
                     let order;
                     do {
-                        order = [...parts];
+                        order = [...round];
                         for (let i = order.length - 1; i > 0; i--) {
                             const j = Math.floor(rand() * (i + 1));
                             [order[i], order[j]] = [order[j], order[i]];
                         }
-                    } while (parts.length > 1 && queue.length > 0 && order[0] === queue[queue.length - 1]);
+                    } while (round.length > 1 && queue.length > 0 && order[0] === queue[queue.length - 1]);
+                    order.forEach(p => left[p]--);
                     queue.push(...order);
                 }
                 return queue;
@@ -767,6 +790,399 @@
             };
         })();
     </script>
+    <script id="automath-facts">
+        // Fact mastery across days (Decision 19). Every fact the warm-up can
+        // give has a state for each learner: Unseen, Learning, Fluent or
+        // Mastered, with a review date. Automath keeps no storage of its own:
+        // the record goes to Compass in a `state` report and comes back in the
+        // `compass_state` launch parameter. Days are local calendar days,
+        // counted from 1 January 1970.
+        const AutomathFacts = (() => {
+            const OPS = ['addition', 'subtraction', 'multiplication', 'division'];
+            const UNSEEN = 0, LEARNING = 1, FLUENT = 2, MASTERED = 3;
+            const FORMAT = '1';
+            // Days to the next review after each fast, correct review in a row.
+            const INTERVALS = [1, 3, 7, 14, 30, 60, 120];
+            // A fact that has slipped before comes back sooner.
+            const LAPSED_FACTOR = 0.6;
+            // After graduating, an operation is checked after 1, 2, 4, then
+            // every 8 weeks.
+            const CHECKIN_DAYS = [7, 14, 28, 56];
+            const GRADUATE_SHARE = 0.95;  // of an operation's facts Mastered, and none Learning
+            const SESSION = 15;           // problems per operation on a practice day
+            const CHECKIN = 10;           // problems per operation on a check-in
+            const FOCUS_FACTS = 4;        // weakest Learning facts practised in a session
+            const MAX_LEARNING = 6;       // no new facts while this many are being learned
+            const MAX_RULE_FACTS = 3;     // n + 0, n × 1 and the like, per set
+            const DUE_WHILE_NEW = 5;      // review places while new facts are still coming
+            const CHECKIN_SLIPS_ALLOWED = 1; // more slips than this bring the operation back
+            const FLUENT_FLOOR_MS = 3000; // the 3 s of Decision 18
+            const TYPING_MARGIN_MS = 1500;
+            const FLUENT_CAP_MS = 6000;
+
+            // The fact table: every problem any level can give, once (7 × 8 and
+            // 8 × 7 are one fact). The order is fixed, since the record stores
+            // facts by position; changing a level's problems needs a new FORMAT.
+            const COMMUTES = { addition: true, multiplication: true };
+            function isRuleFact(a, b, op) {
+                return AutomathCore.isTrivial(a, b, op) || (!!COMMUTES[op] && AutomathCore.isTrivial(b, a, op));
+            }
+            const TABLE = {};
+            const INDEX = {};
+            OPS.forEach(op => {
+                const byKey = new Map();
+                for (let level = 1; level <= 4; level++) {
+                    AutomathCore.problemsAt(op, level).forEach(p => {
+                        const key = AutomathCore.normalizeProblem(p.num1, p.num2, p.operator);
+                        if (byKey.has(key)) return;
+                        const [a, b] = COMMUTES[op]
+                            ? [Math.min(p.num1, p.num2), Math.max(p.num1, p.num2)] : [p.num1, p.num2];
+                        byKey.set(key, { key, num1: a, num2: b, operator: p.operator, answer: p.answer,
+                            tier: level, trivial: isRuleFact(a, b, op) });
+                    });
+                }
+                TABLE[op] = [...byKey.values()].sort((x, y) => x.num1 - y.num1 || x.num2 - y.num2);
+                INDEX[op] = new Map(TABLE[op].map((f, i) => [f.key, i]));
+            });
+
+            function blank() {
+                return { s: UNSEEN, n: 0, d: 0, x: 0, w: 0, i: 0, due: 0 };
+            }
+
+            function create(today) {
+                const facts = {};
+                OPS.forEach(op => { facts[op] = TABLE[op].map(() => ({ ...blank(), due: today })); });
+                return { base: today, typing: null, grad: {}, facts };
+            }
+
+            // ---- The record as a short URL-safe string ----
+            // FORMAT~base day~typing speed (100 ms)~graduation~four fact strings.
+            // Each fact is 5 characters: state, in-a-row count, fluent days,
+            // slips, weakness and interval step in 15 bits, then the review day
+            // (days after the base day) in 15 bits.
+            const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+            function encodeFact(f, base) {
+                const packed = f.s | (f.n << 2) | (f.d << 4) | (f.x << 6) | (f.w << 8) | (f.i << 12);
+                const due = Math.max(0, Math.min(32767, f.due - base));
+                const v = packed * 32768 + due;
+                let out = '';
+                for (let k = 4; k >= 0; k--) out += B64[Math.floor(v / Math.pow(64, k)) % 64];
+                return out;
+            }
+
+            function decodeFact(str, base) {
+                let v = 0;
+                for (const ch of str) {
+                    const c = B64.indexOf(ch);
+                    if (c < 0) return null;
+                    v = v * 64 + c;
+                }
+                const due = v % 32768;
+                const p = Math.floor(v / 32768);
+                return { s: p & 3, n: (p >> 2) & 3, d: (p >> 4) & 3, x: (p >> 6) & 3, w: (p >> 8) & 15, i: (p >> 12) & 7, due: base + due };
+            }
+
+            function encode(rec) {
+                const grad = OPS.map(op => rec.grad[op] ? `${rec.grad[op].step}.${(rec.grad[op].next - rec.base).toString(36)}` : '').join(',');
+                const typing = rec.typing == null ? '' : Math.round(rec.typing / 100).toString(36);
+                return [FORMAT, rec.base.toString(36), typing, grad,
+                    ...OPS.map(op => rec.facts[op].map(f => encodeFact(f, rec.base)).join(''))].join('~');
+            }
+
+            // A damaged or unknown record gives null: the learner starts afresh.
+            function decode(str) {
+                try {
+                    if (!str) return null;
+                    const parts = String(str).split('~');
+                    if (parts.length !== 8 || parts[0] !== FORMAT) return null;
+                    const base = parseInt(parts[1], 36);
+                    if (!Number.isFinite(base)) return null;
+                    const rec = { base, typing: parts[2] ? parseInt(parts[2], 36) * 100 : null, grad: {}, facts: {} };
+                    const grads = parts[3].split(',');
+                    if (grads.length !== OPS.length) return null;
+                    OPS.forEach((op, k) => {
+                        if (!grads[k]) return;
+                        const [step, next] = grads[k].split('.');
+                        rec.grad[op] = { step: parseInt(step, 10), next: base + parseInt(next, 36) };
+                    });
+                    for (let k = 0; k < OPS.length; k++) {
+                        const op = OPS[k];
+                        const s = parts[4 + k];
+                        if (s.length !== TABLE[op].length * 5) return null;
+                        rec.facts[op] = [];
+                        for (let j = 0; j < s.length; j += 5) {
+                            const f = decodeFact(s.slice(j, j + 5), base);
+                            if (!f) return null;
+                            rec.facts[op].push(f);
+                        }
+                    }
+                    return rec;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            // ---- Fluency ----
+            // Fluent = correct within 3 s, or within the learner's own typing
+            // time plus 1.5 s if they type slowly (measured on rule facts such
+            // as 4 + 0 or 6 × 1), never more than 6 s.
+            function fluentLimit(rec) {
+                if (!rec || rec.typing == null) return FLUENT_FLOOR_MS;
+                return Math.min(FLUENT_CAP_MS, Math.max(FLUENT_FLOOR_MS, rec.typing + TYPING_MARGIN_MS));
+            }
+
+            function isFluent(rec, correct, ms) {
+                return correct && ms != null && ms <= fluentLimit(rec);
+            }
+
+            function interval(f) {
+                const days = INTERVALS[Math.min(f.i, INTERVALS.length - 1)];
+                return f.x > 0 ? Math.max(1, Math.round(days * LAPSED_FACTOR)) : days;
+            }
+
+            function slip(f, today, weight) {
+                if (f.s === FLUENT || f.s === MASTERED) f.x = Math.min(3, f.x + 1);
+                f.s = LEARNING;
+                f.n = 0;
+                f.d = 0;
+                f.i = 0;
+                f.w = Math.min(15, f.w + weight);
+                f.due = today;
+            }
+
+            // One scored answer. Retries of a missed problem are not recorded.
+            function recordAnswer(rec, op, key, correct, ms, today) {
+                const idx = INDEX[op].get(key);
+                if (idx === undefined) return;
+                const f = rec.facts[op][idx];
+                const fluent = isFluent(rec, correct, ms);
+                if (correct && ms != null && TABLE[op][idx].trivial && ms < 20000) {
+                    rec.typing = rec.typing == null ? ms : Math.round(rec.typing * 0.7 + ms * 0.3);
+                }
+                if (!correct) return slip(f, today, 4);
+                if (!fluent) return slip(f, today, 2);
+                f.w = Math.max(0, f.w - 3);
+                if (f.s === UNSEEN) {
+                    // Fast and right on first sight: the fact was known before
+                    // (a basic fact cannot be guessed that fast), so it counts
+                    // as two fluent days. One more fast answer on a later day, 3
+                    // days on, shows it was kept, and it is Mastered.
+                    f.s = FLUENT; f.d = 2; f.i = 1; f.due = today + INTERVALS[1];
+                } else if (f.s === LEARNING) {
+                    f.n++;
+                    if (f.n >= 2) {
+                        f.s = FLUENT; f.n = 0; f.d = 1; f.i = 0; f.due = today + 1;
+                    }
+                } else if (today >= f.due) {
+                    // A review on or after its date: one more fluent day.
+                    f.d = Math.min(3, f.d + 1);
+                    if (f.s === FLUENT && f.d >= 3) f.s = MASTERED;
+                    f.i = Math.min(INTERVALS.length - 1, f.i + 1);
+                    f.due = today + interval(f);
+                }
+                // Fluent again before its date (as a known fact): no change.
+            }
+
+            function counts(rec, op) {
+                const c = { unseen: 0, learning: 0, fluent: 0, mastered: 0, total: TABLE[op].length };
+                rec.facts[op].forEach(f => {
+                    c[['unseen', 'learning', 'fluent', 'mastered'][f.s]]++;
+                });
+                return c;
+            }
+
+            // ---- Choosing the problems ----
+            function shuffle(list, rand) {
+                for (let i = list.length - 1; i > 0; i--) {
+                    const j = Math.floor(rand() * (i + 1));
+                    [list[i], list[j]] = [list[j], list[i]];
+                }
+                return list;
+            }
+
+            function asProblem(op, idx, rand) {
+                const t = TABLE[op][idx];
+                const swap = !!COMMUTES[op] && t.num1 !== t.num2 && rand() < 0.5;
+                return { num1: swap ? t.num2 : t.num1, num2: swap ? t.num1 : t.num2, operator: t.operator, answer: t.answer, key: t.key };
+            }
+
+            // Put the picks in an order where the same fact never comes back
+            // within 3 problems and, where possible, no two problems in a row
+            // share a number (6 × 8 then 7 × 8 are easy to confuse).
+            function arrange(op, picks, rand) {
+                const left = shuffle([...picks], rand);
+                const out = [];
+                while (left.length > 0) {
+                    const prev = out[out.length - 1];
+                    const recent = out.slice(-3);
+                    // A fact with more asks still to place goes first, so the
+                    // repeats spread out instead of piling up at the end.
+                    const score = idx => {
+                        let s = -2 * left.filter(k => k === idx).length;
+                        if (recent.includes(idx)) s += 20;
+                        if (prev !== undefined) {
+                            const a = TABLE[op][idx], b = TABLE[op][prev];
+                            if (a.num1 === b.num1 || a.num1 === b.num2 || a.num2 === b.num1 || a.num2 === b.num2) s += 1;
+                        }
+                        return s;
+                    };
+                    let best = 0;
+                    for (let k = 1; k < left.length; k++) if (score(left[k]) < score(left[best])) best = k;
+                    out.push(left.splice(best, 1)[0]);
+                }
+                return out;
+            }
+
+            // A practice day: about 8 asks of the weakest Learning facts, the
+            // reviews that are due, a few new facts while few are being learned,
+            // and known facts to fill.
+            function planSession(rec, op, today, rand = Math.random) {
+                const facts = rec.facts[op];
+                const all = facts.map((f, i) => i);
+                const picks = [];
+                const used = new Set();
+                let rule = 0;
+                // Rule facts (n + 0, n × 1) are tracked but served sparingly: at
+                // most 3 in a set, as Decision 17 already limits them.
+                const take = (idx, times = 1, force = false) => {
+                    if (used.has(idx)) return;
+                    if (TABLE[op][idx].trivial && !force) {
+                        if (rule >= MAX_RULE_FACTS) return;
+                        rule++;
+                    }
+                    for (let t = 0; t < times && picks.length < SESSION; t++) picks.push(idx);
+                    used.add(idx);
+                };
+
+                const learning = shuffle(all.filter(i => facts[i].s === LEARNING), rand)
+                    .sort((a, b) => facts[b].w - facts[a].w);
+                learning.slice(0, FOCUS_FACTS).forEach(i => take(i, facts[i].w >= 8 ? 3 : 2));
+
+                // Fluent facts waiting to be confirmed come before Mastered ones;
+                // within each, the longest overdue first. While facts are still
+                // unseen and few are being learned, reviews get 5 places so the
+                // rest of the table keeps coming.
+                const due = shuffle(all.filter(i => (facts[i].s === FLUENT || facts[i].s === MASTERED) && facts[i].due <= today), rand)
+                    .sort((a, b) => facts[a].s - facts[b].s || facts[a].due - facts[b].due);
+                const unseen = shuffle(all.filter(i => facts[i].s === UNSEEN), rand)
+                    .sort((a, b) => TABLE[op][a].tier - TABLE[op][b].tier || TABLE[op][a].trivial - TABLE[op][b].trivial);
+                const learningCount = learning.length;
+                const newRoom = Math.max(0, (MAX_LEARNING - learningCount) * 2);
+                const knownLeft = all.some(i => (facts[i].s === FLUENT || facts[i].s === MASTERED) && facts[i].due > today);
+                const dueRoom = unseen.length > 0 && newRoom > 0
+                    ? DUE_WHILE_NEW
+                    : Math.max(4, SESSION - picks.length - (knownLeft ? 2 : 0));
+                due.slice(0, dueRoom).forEach(i => take(i));
+
+                unseen.slice(0, Math.min(newRoom, SESSION - picks.length)).forEach(i => take(i));
+
+                const known = shuffle(all.filter(i => !used.has(i) && (facts[i].s === FLUENT || facts[i].s === MASTERED)), rand);
+                known.slice(0, SESSION - picks.length).forEach(i => take(i));
+
+                // Still short (early days, few facts known): more new facts, then
+                // the rest of the Learning facts, then anything.
+                const rest = [...unseen, ...learning, ...shuffle([...all], rand)].filter(i => !used.has(i));
+                for (const pass of [false, true]) {
+                    for (const i of rest) {
+                        if (picks.length >= SESSION) break;
+                        take(i, 1, pass);
+                    }
+                }
+                return arrange(op, picks, rand).map(i => asProblem(op, i, rand));
+            }
+
+            // A check-in for a graduated operation: facts that slipped last time,
+            // then the reviews that are due, then a sample of mastered facts.
+            function planCheckin(rec, op, today, rand = Math.random) {
+                const facts = rec.facts[op];
+                const all = facts.map((f, i) => i);
+                const order = [
+                    ...shuffle(all.filter(i => facts[i].s === LEARNING), rand),
+                    ...shuffle(all.filter(i => facts[i].s !== UNSEEN && facts[i].s !== LEARNING && facts[i].due <= today), rand)
+                        .sort((a, b) => facts[a].due - facts[b].due),
+                    ...shuffle(all.filter(i => facts[i].s === MASTERED), rand),
+                    ...shuffle(all.filter(i => facts[i].s !== UNSEEN), rand)
+                ];
+                const picks = [...new Set(order)].slice(0, CHECKIN);
+                return arrange(op, picks, rand).map(i => asProblem(op, i, rand));
+            }
+
+            // ---- Graduation ----
+            function isGraduated(rec, op) {
+                return !!rec.grad[op];
+            }
+
+            // What today holds for an operation: daily practice, a check-in, or
+            // nothing (graduated, and the next check-in is not due yet).
+            function todayKind(rec, op, today) {
+                const g = rec.grad[op];
+                if (!g) return 'practice';
+                return today >= g.next ? 'checkin' : 'rest';
+            }
+
+            function ready(rec, op) {
+                const c = counts(rec, op);
+                return c.learning === 0 && c.mastered >= GRADUATE_SHARE * c.total;
+            }
+
+            // After an operation's set: a check-in moves its schedule on, or
+            // brings the operation back to daily practice after 2 or more slips
+            // (only the slipped facts are Learning again; nothing else resets).
+            // On a good check-in, mastered facts that have never slipped and are
+            // overdue but were not asked move out too: the sample stood for them.
+            // A practice day can graduate the operation.
+            function finishPart(rec, op, kind, answers, today) {
+                if (kind === 'checkin') {
+                    const slips = answers.filter(a => !a.fluent).length;
+                    if (slips > CHECKIN_SLIPS_ALLOWED) {
+                        delete rec.grad[op];
+                        return 'back';
+                    }
+                    const asked = new Set(answers.map(a => a.key));
+                    rec.facts[op].forEach((f, i) => {
+                        if (f.s === MASTERED && f.x === 0 && f.due <= today && !asked.has(TABLE[op][i].key)) {
+                            f.i = Math.min(INTERVALS.length - 1, f.i + 1);
+                            f.due = today + interval(f);
+                        }
+                    });
+                    const g = rec.grad[op];
+                    g.step = Math.min(CHECKIN_DAYS.length - 1, g.step + 1);
+                    g.next = today + CHECKIN_DAYS[g.step];
+                    return 'kept';
+                }
+                if (kind === 'practice' && ready(rec, op)) {
+                    rec.grad[op] = { step: 0, next: today + CHECKIN_DAYS[0] };
+                    return 'graduated';
+                }
+                return null;
+            }
+
+            // When each operation is next needed, for Compass: today for daily
+            // practice, the check-in day for a graduated operation.
+            function dueDays(rec, today) {
+                const out = {};
+                OPS.forEach(op => {
+                    out[op] = rec.grad[op] ? Math.max(today, rec.grad[op].next) : today;
+                });
+                return out;
+            }
+
+            function isoDay(day) {
+                return new Date(day * 86400000).toISOString().slice(0, 10);
+            }
+
+            function localDay(date = new Date()) {
+                return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+            }
+
+            return {
+                OPS, UNSEEN, LEARNING, FLUENT, MASTERED, INTERVALS, CHECKIN_DAYS, SESSION, CHECKIN, TABLE,
+                create, encode, decode, fluentLimit, isFluent, recordAnswer, counts,
+                planSession, planCheckin, isGraduated, todayKind, ready, finishPart, dueDays, isoDay, localDay
+            };
+        })();
+    </script>
     <script>
         // Compass support (app contract 0.1): `compass_parts` in the URL lists the
         // operations to run, with no picker; each finished operation is reported
@@ -774,7 +1190,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.5.0';
+        const APP_VERSION = '1.6.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
@@ -782,12 +1198,30 @@
         const urlParams = (() => {
             try { return new URLSearchParams(window.location.search); } catch (e) { return new URLSearchParams(); }
         })();
-        const compassParts = (() => {
+        const listedParts = (() => {
             const value = urlParams.get('compass_parts');
             if (!value) return null;
             const parts = [...new Set(value.split(',').map(p => p.trim().toLowerCase()).filter(p => OPERATIONS.includes(p)))];
             return parts.length > 0 ? parts : null;
         })();
+        // The learner's fact record (Decision 19), kept by Compass and handed
+        // back in `compass_state`. With a record, each operation's problems are
+        // chosen fact by fact. Without one (the first day, or a Compass that
+        // does not keep it yet), the level staircase chooses them as before and
+        // its answers start a new record. Outside Compass there is no record.
+        const today = AutomathFacts.localDay();
+        const savedRecord = listedParts ? AutomathFacts.decode(urlParams.get('compass_state')) : null;
+        const record = listedParts ? (savedRecord || AutomathFacts.create(today)) : null;
+        const factMode = !!savedRecord;
+        // What each listed operation does today: 'practice', 'checkin' (a
+        // graduated operation whose check-in is due) or 'rest' (graduated, next
+        // check-in not due yet: reported done at once, nothing asked).
+        const partKinds = {};
+        (listedParts || []).forEach(op => {
+            partKinds[op] = factMode ? AutomathFacts.todayKind(record, op, today) : 'practice';
+        });
+        const restingParts = (listedParts || []).filter(op => partKinds[op] === 'rest');
+        const compassParts = listedParts ? listedParts.filter(op => partKinds[op] !== 'rest') : null;
         // How a Compass run of two or more operations is laid out: `grouped` runs
         // them one after another (15 problems each); `mixed` interleaves them in
         // one set (15 of each, every operation once per round in a random order,
@@ -900,7 +1334,19 @@
         }
 
         function newCounts() {
-            return { answered: 0, correct: 0, fluent: 0, ms: 0 };
+            return { shown: 0, answered: 0, correct: 0, fluent: 0, ms: 0 };
+        }
+
+        // A record-driven set for one operation: a check-in or a practice day.
+        function planFor(op) {
+            if (!factMode) return null;
+            return partKinds[op] === 'checkin'
+                ? AutomathFacts.planCheckin(record, op, today)
+                : AutomathFacts.planSession(record, op, today);
+        }
+
+        function problemsFor(op) {
+            return opState[op] && opState[op].plan ? opState[op].plan.length : totalProblems;
         }
 
         function beginExercise() {
@@ -917,7 +1363,7 @@
 
         function startPractice() {
             mixedQueue = null;
-            opState = { [selectedOperation]: { rules: AutomathCore.newState(), ...newCounts() } };
+            opState = { [selectedOperation]: { rules: AutomathCore.newState(), plan: planFor(selectedOperation), ...newCounts() } };
             beginExercise();
         }
 
@@ -925,16 +1371,18 @@
         // operation keeps its own level, streak and trivial counts, as it would
         // on its own.
         function startMixedPractice() {
-            mixedQueue = AutomathCore.buildMixedQueue(compassParts, totalProblems);
             opState = {};
+            const counts = {};
             compassParts.forEach(op => {
-                opState[op] = { rules: AutomathCore.newState(), ...newCounts() };
+                opState[op] = { rules: AutomathCore.newState(), plan: planFor(op), ...newCounts() };
+                counts[op] = problemsFor(op);
             });
+            mixedQueue = AutomathCore.buildMixedQueue(compassParts, counts);
             beginExercise();
         }
 
         function problemsInRun() {
-            return mixedQueue ? mixedQueue.length : totalProblems;
+            return mixedQueue ? mixedQueue.length : problemsFor(selectedOperation);
         }
 
         // What comes next: a missed problem that is due again, else the next
@@ -955,14 +1403,19 @@
         }
 
         function partLabel() {
-            return mixedQueue ? 'Mixed · ' : compassParts ? `${OPERATION_NAMES[selectedOperation]} · ` : '';
+            if (mixedQueue) return 'Mixed · ';
+            if (!compassParts) return '';
+            return partKinds[selectedOperation] === 'checkin'
+                ? `${OPERATION_NAMES[selectedOperation]} check-in · `
+                : `${OPERATION_NAMES[selectedOperation]} · `;
         }
 
         function showNextProblem() {
             if (mixedQueue) selectedOperation = mixedQueue[currentProblem];
-            const rules = opState[selectedOperation].rules;
-            const problem = AutomathCore.pickProblem(selectedOperation, rules);
-            AutomathCore.recordShown(rules, problem, selectedOperation);
+            const s = opState[selectedOperation];
+            const problem = s.plan ? s.plan[s.shown] : AutomathCore.pickProblem(selectedOperation, s.rules);
+            s.shown++;
+            AutomathCore.recordShown(s.rules, problem, selectedOperation);
             currentIsRetry = false;
             displayProblem(problem);
             progressEl.textContent = `${partLabel()}Problem ${currentProblem + 1} of ${problemsInRun()}`;
@@ -1025,9 +1478,15 @@
                 return;
             }
 
-            const fluent = AutomathCore.isFluent(selectedOperation, isCorrect, ms);
+            const fluent = record
+                ? AutomathFacts.isFluent(record, isCorrect, ms)
+                : AutomathCore.isFluent(selectedOperation, isCorrect, ms);
+            const key = currentProblemData.key
+                || AutomathCore.normalizeProblem(currentProblemData.num1, currentProblemData.num2, currentProblemData.operator);
+            if (record) AutomathFacts.recordAnswer(record, selectedOperation, key, isCorrect, ms, today);
             sessionHistory.push({
                 operation: selectedOperation,
+                key: key,
                 num1: currentProblemData.num1,
                 num2: currentProblemData.num2,
                 operator: currentProblemData.operator,
@@ -1057,7 +1516,7 @@
 
             // Mixed runs: an operation's last problem is answered, so it is
             // finished and Compass hears about it now, not only at the end.
-            if (mixedQueue && s.answered === totalProblems) finishMixedPart(selectedOperation);
+            if (mixedQueue && s.answered === problemsFor(selectedOperation)) finishMixedPart(selectedOperation);
 
             setTimeout(() => {
                 currentProblem++;
@@ -1069,15 +1528,17 @@
         // Compass, then go on to the next listed operation or to the results.
         function finishPart() {
             const seconds = exerciseSeconds();
+            const total = problemsFor(selectedOperation);
             reportPart({
                 part: selectedOperation,
-                index: compassParts ? partIndex + 1 : 1,
+                index: listedParts ? listedParts.indexOf(selectedOperation) + 1 : 1,
+                total,
                 correct: correctAnswers,
                 fluent: opState[selectedOperation].fluent,
                 seconds,
                 history: sessionHistory
             });
-            runParts.push({ operation: selectedOperation, correct: correctAnswers, total: totalProblems, seconds });
+            runParts.push({ operation: selectedOperation, correct: correctAnswers, total, seconds, outcome: settleRecord(selectedOperation, sessionHistory) });
             if (compassParts && partIndex < compassParts.length - 1) {
                 showPartScreen();
             } else {
@@ -1091,15 +1552,81 @@
         function finishMixedPart(op) {
             const s = opState[op];
             const seconds = Math.round(s.ms / 1000);
+            const total = problemsFor(op);
+            const history = sessionHistory.filter(item => item.operation === op);
             reportPart({
                 part: op,
-                index: compassParts.indexOf(op) + 1,
+                index: listedParts.indexOf(op) + 1,
+                total,
                 correct: s.correct,
                 fluent: s.fluent,
                 seconds,
-                history: sessionHistory.filter(item => item.operation === op)
+                history
             });
-            runParts.push({ operation: op, correct: s.correct, total: totalProblems, seconds });
+            runParts.push({ operation: op, correct: s.correct, total, seconds, outcome: settleRecord(op, history) });
+        }
+
+        // The record after one operation's set: a check-in moves its schedule
+        // on (or brings the operation back), a practice day may graduate it.
+        // Compass gets the whole record each time, so stopping partway keeps
+        // what was learned. Returns what changed, for the screen.
+        function settleRecord(op, history) {
+            if (!record) return null;
+            const outcome = AutomathFacts.finishPart(record, op, partKinds[op] || 'practice',
+                history.map(item => ({ key: item.key, fluent: item.fluent })), today);
+            reportState();
+            return outcome;
+        }
+
+        function putReport(report) {
+            const block = document.createElement('script');
+            block.type = 'application/json';
+            block.setAttribute('data-compass-report', '');
+            block.textContent = JSON.stringify(report);
+            document.body.appendChild(block);
+        }
+
+        // The fact record for Compass to keep and hand back next time
+        // (`compass_state`), when each operation is next needed (`due`: today
+        // for daily practice, the check-in day for a graduated operation), and
+        // a summary for guides.
+        function reportState() {
+            const due = AutomathFacts.dueDays(record, today);
+            const summary = {};
+            const dueDates = {};
+            OPERATIONS.forEach(op => {
+                const c = AutomathFacts.counts(record, op);
+                summary[op] = { mastered: c.mastered, fluent: c.fluent, learning: c.learning, unseen: c.unseen,
+                    total: c.total, graduated: AutomathFacts.isGraduated(record, op) };
+                dueDates[op] = AutomathFacts.isoDay(due[op]);
+            });
+            putReport({
+                kind: 'state',
+                data: AutomathFacts.encode(record),
+                due: dueDates,
+                summary,
+                fluentMs: AutomathFacts.fluentLimit(record),
+                appVersion: APP_VERSION
+            });
+        }
+
+        // A graduated operation with no check-in due: done today, nothing to ask.
+        function reportRest(op) {
+            putReport({
+                kind: 'part',
+                part: op,
+                index: listedParts.indexOf(op) + 1,
+                of: listedParts.length,
+                mode: runMode,
+                status: 'finished',
+                rest: true,
+                correct: 0,
+                wrong: 0,
+                fluent: 0,
+                seconds: 0,
+                items: [],
+                appVersion: APP_VERSION
+            });
         }
 
         function reportPart(part) {
@@ -1110,10 +1637,11 @@
                 of: compassParts ? compassParts.length : 1,
                 mode: runMode,
                 status: 'finished',
+                check: partKinds[part.part] === 'checkin' || undefined,
                 correct: part.correct,
-                wrong: totalProblems - part.correct,
+                wrong: part.total - part.correct,
                 fluent: part.fluent,
-                fluentMs: AutomathCore.FLUENT_MS[part.part],
+                fluentMs: record ? AutomathFacts.fluentLimit(record) : AutomathCore.FLUENT_MS[part.part],
                 seconds: part.seconds,
                 items: part.history.map(item => ({
                     prompt: `${item.num1} ${item.operator} ${item.num2}`,
@@ -1126,11 +1654,7 @@
                 })),
                 appVersion: APP_VERSION
             };
-            const block = document.createElement('script');
-            block.type = 'application/json';
-            block.setAttribute('data-compass-report', '');
-            block.textContent = JSON.stringify(report);
-            document.body.appendChild(block);
+            putReport(report);
         }
 
         function showPartScreen() {
@@ -1140,6 +1664,7 @@
             const part = runParts[runParts.length - 1];
             document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
             renderScore(document.getElementById('partScore'), part.correct, part.total, part.seconds);
+            renderMastery(document.getElementById('partMastery'), [part]);
             celebrateIfEarned(part.correct, part.total);
             renderReview(document.getElementById('partReviewBody'), sessionHistory);
             document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
@@ -1239,6 +1764,41 @@
             document.getElementById('summaryTable').classList.remove('hidden');
         }
 
+        // One line per operation: how many of its facts are mastered, and the
+        // news when it graduates or comes back from a check-in. Only with a
+        // record from Compass: on a first day every count would be 0.
+        function renderMastery(container, parts) {
+            container.innerHTML = '';
+            if (!factMode) return;
+            parts.forEach(part => {
+                const op = part.operation;
+                const name = OPERATION_NAMES[op];
+                const c = AutomathFacts.counts(record, op);
+                const line = document.createElement('div');
+                if (part.outcome === 'graduated') {
+                    line.textContent = `${name}: all your facts are fluent! You only need a quick check-in now and then.`;
+                } else if (part.outcome === 'back') {
+                    line.textContent = `${name}: a few facts need practice again. They're back in your warm-up.`;
+                } else if (part.outcome === 'kept') {
+                    line.textContent = `${name} check-in done. Still fluent.`;
+                } else {
+                    line.textContent = `${name} facts mastered: ${c.mastered} of ${c.total}`;
+                }
+                container.appendChild(line);
+            });
+        }
+
+        // Every listed operation is graduated and none has a check-in due.
+        function showNothingDue() {
+            startScreen.classList.remove('active');
+            resultsScreen.classList.add('active');
+            restartBtn.classList.add('hidden');
+            document.getElementById('resultsTitle').textContent = 'Nothing due today ✓';
+            document.getElementById('resultsScore').innerHTML = '';
+            document.getElementById('resultsMastery').textContent = 'Your facts are fluent. See you at your next check-in.';
+            document.getElementById('reviewTable').closest('.review-section').classList.add('hidden');
+        }
+
         function showResults() {
             practiceScreen.classList.remove('active');
             resultsScreen.classList.add('active');
@@ -1247,6 +1807,7 @@
             // own problems. In Compass mode a table of every exercise in this
             // visit follows, one score per operation.
             const part = runParts[runParts.length - 1];
+            renderMastery(document.getElementById('resultsMastery'), mixedQueue ? runParts : [part]);
             if (mixedQueue) {
                 // One set, so one score for it, then one row per operation so a
                 // weak operation still shows.
@@ -1393,7 +1954,11 @@
         }
 
         // Compass chose the operations: skip the picker and start the first one.
-        if (compassParts && runMode === 'mixed') {
+        // Graduated operations with no check-in due are reported done first.
+        restingParts.forEach(reportRest);
+        if (compassParts && compassParts.length === 0) {
+            showNothingDue();
+        } else if (compassParts && runMode === 'mixed') {
             startMixedPractice();
         } else if (compassParts) {
             selectedOperation = compassParts[0];

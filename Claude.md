@@ -114,6 +114,9 @@ Edit `totalProblems` variable (line ~260) and update HTML placeholder (line ~209
 ### Adjusting Progression Speed
 Edit the streak requirement (`needed`) in `recordAnswer()` in the `automath-core` script block, then run `node --test` and `node tests/simulate.js`
 
+### Changing Fact Mastery, Review or Graduation
+The constants at the top of the `automath-facts` script block (intervals, the graduation share, the session mix). Run `node --test` and `node tests/simulate-days.js` and compare. Changing any level's problems changes the fact table: bump `FORMAT` (Decision 19)
+
 ## Key Implementation Details
 
 **Adaptive Difficulty:**
