@@ -121,6 +121,10 @@ Edit the streak requirement (`needed`) in `recordAnswer()` in the `automath-core
 ### Changing Fact Mastery, Review or Graduation
 The constants at the top of the `automath-facts` script block (intervals, the graduation share, the session mix). Run `node --test` and `node tests/simulate-days.js` and compare. Changing any level's problems changes the fact table: bump `FORMAT` (Decision 19)
 
+## Never Write a Password or Credential Into Any File
+
+No password, API key, token, private key or database URL with a password goes into any file: code, docs, comments, tests or logs. Docs name accounts by username and role only; credentials live in the team's password manager or the hosting platform's settings. CI runs `tests/check-no-credentials.sh` on every pull request and fails on anything that looks like a credential; a deliberate fake in a test ends its line with `credential-check: allow`. A credential that reaches the repository must be changed, not just deleted, because git history and clones keep it.
+
 ## Key Implementation Details
 
 **Adaptive Difficulty:**
