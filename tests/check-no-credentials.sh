@@ -14,13 +14,14 @@ cd "$(git rev-parse --show-toplevel)"
 
 patterns=(
   # A table with a Password column
-  '^\|.*\|[[:space:]]*pass(word|wd)[[:space:]]*\|'
+  '^\|([^|]*\|)*[[:space:]]*pass(word|wd)[[:space:]]*\|'
   # "user@example.com / secret" sign-in pairs
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}[[:space:]]+/[[:space:]]+[^[:space:]/]+'
   # password: "secret", pwd = 'secret' in code or config (a quoted literal, not a variable)
   '(^|[[:space:]{,(])["'"'"']?(password|passwd|pwd|pw)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'`][^"'"'"'`[:space:]$]{4,}["'"'"'`]'
   # A literal handed to a hashing call
-  '(bcrypt\.hash|hashPassword|hashSync)\([[:space:]]*["'"'"'`][^"'"'"'`]+["'"'"'`]'
+  '(bcrypt\.hash|hashPassword|hashSync)\([^,)]*["'"'"'`]'
+  '(password|passwd|pwd)["'"'"']?[[:space:]]*[:=][[:space:]]*([A-Za-z_.]+[[:space:]]*\+[[:space:]]*["'"'"'`]|`[^`]*\$\{)'
   # Known key formats
   'sk-ant-[A-Za-z0-9_-]{20,}'
   'sk-[A-Za-z0-9]{32,}'
