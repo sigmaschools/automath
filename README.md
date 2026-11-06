@@ -14,7 +14,7 @@ Automath helps elementary students build **automaticity** with basic math facts�
 
 ✨ **Adaptive Difficulty** - Starts easy and automatically adjusts based on performance
 🎯 **Low-Pressure Design** - No timers during practice, supportive feedback, predictable sessions
-⚡ **Quick Sessions** - 15 problems per operation, ~2-4 minutes when automatic
+⚡ **Quick Sessions** - 10 problems per operation, ~1-3 minutes when automatic
 🧠 **Research-Based** - Built on learning science principles from *The Math Academy Way*
 📱 **Works Anywhere** - Single HTML file, runs in any browser, works offline
 🔒 **Privacy-First** - No data collection, no tracking, no login required
@@ -22,7 +22,7 @@ Automath helps elementary students build **automaticity** with basic math facts�
 ## How It Works
 
 1. **Select an operation** - Addition, Subtraction, Multiplication, or Division
-2. **Practice 15 problems** - Difficulty adapts in real-time based on your answers
+2. **Practice 10 problems** - Difficulty adapts in real-time based on your answers
 3. **View your results** - See your score, accuracy, and total time
 
 ### Adaptive Difficulty System
@@ -33,6 +33,10 @@ Automath helps elementary students build **automaticity** with basic math facts�
 - **Correct every miss** - the right answer shows, and the problem comes back once a few problems later
 - **Get support immediately** when struggling (difficulty decreases on wrong answer)
 - **Cap at age-appropriate level** (12× tables, addition and subtraction facts within 20)
+
+### Running inside Compass
+
+Compass, the school shell that runs a learner's apps in order, opens Automath as a daily warm-up. With `?compass_parts=addition,subtraction,…` the picker is skipped and the listed operations run in one visit: grouped one after another on odd local days, one mixed set on even days (`mode=mixed|grouped` forces one for testing). Each finished operation leaves a `kind: "part"` report in the page, and a `kind: "state"` report carries the learner's per-fact record, which Compass hands back next time as `compass_state`. With that record each day's problems aim at weak and due facts, reviews are spaced out, and an operation whose facts are mastered graduates out of the daily warm-up to short check-ins. Automath itself still stores nothing. The contract is `compass/APP-CONTRACT.md` in the Compass repository; the decisions are 12 to 22 in [DESIGN_RATIONALE.md](./DESIGN_RATIONALE.md).
 
 ## Educational Principles
 
@@ -73,7 +77,7 @@ Automaticity is the foundation of mathematical fluency.
 
 - Pure HTML5, CSS3, and vanilla JavaScript
 - Zero dependencies, zero build process
-- Single self-contained file (~15KB)
+- Single self-contained file (~87KB), with the practice rules and the fact record in their own script blocks so `node --test` can check them
 - Works on all modern browsers
 
 ### Design Constraints
@@ -132,7 +136,7 @@ python3 -m http.server 8000
 
 Future enhancements under consideration:
 
-- [ ] LocalStorage progress tracking (remember difficulty across sessions)
+- [x] Progress across days: a per-fact record, spaced review and graduation in Compass runs (Decision 19); the stand-alone page still starts fresh each time
 - [x] Mixed practice mode (Compass runs, alternate days); still to do on the stand-alone picker
 - [ ] Visual progress indicator
 - [ ] Keyboard shortcuts for operation selection
