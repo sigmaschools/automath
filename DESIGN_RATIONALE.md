@@ -741,6 +741,10 @@ Automath is informed by learning science research, but hasn't been empirically v
 
 **Next step**: Would benefit from formal user testing with real K-5 students and teachers in classroom settings.
 
+### 11. The Decisions Log Stays Current; the Summaries Drift
+
+Between 3 and 5 November 2026 eleven Decisions (12 to 22) were each recorded here in the pull request that made them, but the summary pages (README, Claude.md, PROJECT_CONTEXT.md) still said 15 problems per exercise, offered LocalStorage as the way to keep progress, gave line numbers from a 450-line file that is now about 2,000, and told contributors to push to a long-gone branch. A docs pass on 6 November brought them in line. **Lesson**: a change that alters a number or a workflow the summaries quote (problem counts, file layout, how to deploy) updates them in the same pull request; refer to functions and script blocks by name, not by line.
+
 ---
 
 ## Open Questions

@@ -58,7 +58,8 @@
 //   a slow correct answer neither builds nor breaks the streak, Decision 18)
 //   (3 to climb back into a level slipped out of earlier in the exercise)
 // Regression: -1 level immediately after any wrong answer
-// Session: 15 problems (level 4 can be reached by problem 7: 2+2+2)
+// Session: 10 problems (level 4 can be reached by problem 7: 2+2+2; Decision 21)
+// With a fact record from Compass, problems come from the record instead (Decision 19)
 ```
 
 **Difficulty Level Ranges**:
@@ -72,13 +73,13 @@
 
 ### Session Structure
 
-**Decision**: 15 problems per operation, no time limit during practice.
+**Decision**: 10 problems per operation (15 until Decision 21, 5 Nov 2026), no time limit during practice. A graduated operation's check-in is also 10.
 
 **Reasoning**:
-- **Math**: 15 problems allows reaching Level 4 (3+3+3 to reach Level 4, then 6 problems at target difficulty)
-- **Time**: ~2-4 minutes at automaticity level, fits 5-minute warmup goal (4 operations)
+- **Math**: 10 problems still reaches Level 4 (2+2+2 to climb, then 4 problems at target difficulty)
+- **Time**: a 60-problem mixed day (4 × 15) was found too long for a ~5-minute warm-up; 40 fits
 - **Predictability**: Fixed count reduces anxiety vs. timed practice
-- **Progress visibility**: Students see "Problem X of 15" and know endpoint
+- **Progress visibility**: Students see "Problem X of 10" and know endpoint
 
 **Alternative considered**: Time-based (60 seconds) - rejected due to anxiety concerns
 
@@ -94,7 +95,7 @@
 **Flow**:
 1. Select operation (Addition/Subtraction/Multiplication/Division)
 2. Immediately start practice at Level 1
-3. Complete 15 problems with adaptive difficulty
+3. Complete 10 problems with adaptive difficulty
 4. View results (score, accuracy, time)
 5. Click "Practice Again" to return to operation selection
 
@@ -171,9 +172,9 @@
 
 ### Deployment: GitHub Pages
 - **Why**: Free, fast, integrated with repository
-- **Configuration**: Deploy from branch `claude/create-automath-app-icRFe`
-- **URL pattern**: `https://<username>.github.io/automath/`
-- **Updates**: Automatic on push (1-2 minute deploy time)
+- **Configuration**: Deploy from `main`; changes arrive by pull request
+- **URL**: `https://sigmaschools.github.io/automath/` (Compass loads this same page)
+- **Updates**: Automatic on merge (1-2 minute deploy time); no Compass rebuild is needed
 
 ---
 
@@ -187,15 +188,16 @@
 ├── PROJECT_CONTEXT.md     # This file - technical documentation
 ├── DESIGN_RATIONALE.md    # Conceptual and decision documentation
 ├── README.md              # GitHub repository readme
-└── .git/                  # Git repository
+├── tests/                 # node --test suites (core.test.js, facts.test.js) and simulators
+└── .github/workflows/     # test.yml runs the tests on every PR
 ```
 
 ### Key Files
 
 **automath.html**
-- Complete self-contained application
-- Sections: HTML structure, CSS styles, JavaScript logic
-- ~450 lines total (~150 HTML, ~100 CSS, ~200 JS)
+- Complete self-contained application, about 2,000 lines
+- Script blocks: `automath-core` (the level staircase and practice rules, no page code), `automath-facts` (the per-fact record, session planning, review and graduation, no page code), then the page code (screens, input, Compass reports)
+- The two rule blocks are loaded by `tests/load-core.js`, so they are tested without a browser
 
 **index.html**
 - Exact copy of automath.html for GitHub Pages root deployment
@@ -236,7 +238,7 @@ To ensure high-quality practice sessions, the app implements validation to preve
 
 **2. Trivial Problem Limitations**
 - Maximum 1 trivial problem consecutively (no back-to-back ×0, ×1, +0, etc.)
-- Maximum 3 trivial problems per session (~20% of 15 problems)
+- Maximum 3 trivial problems per session (~30% of 10 problems)
 - Trivial problems defined as: ×0, ×1, ÷1, +0, -0
 
 **3. Operand Clustering Reduction**
@@ -258,7 +260,7 @@ To ensure high-quality practice sessions, the app implements validation to preve
 **Decision**: Display comprehensive review of all problems after session completion.
 
 **Features**:
-- Shows all 15 problems in order
+- Shows all 10 problems in order
 - Displays student's answer for each problem
 - Shows correct answer only when student got it wrong
 - Visual feedback: Green ✓ for correct, red row highlighting for incorrect
@@ -278,7 +280,7 @@ To ensure high-quality practice sessions, the app implements validation to preve
 
 ### State Management
 
-Simple global state (no framework needed):
+Simple global state (no framework needed). The snippet below is the original page state; the staircase state now lives in `automath-core` (`recordAnswer(s, correct, fluent)`), the fact record in `automath-facts`, and `totalProblems` is a constant taken from `AutomathFacts.SESSION`.
 
 ```javascript
 // Core session state
@@ -324,7 +326,7 @@ Managed via CSS classes (no routing library):
 ### Working Features ✅
 - ✅ Four operation types (addition, subtraction, multiplication, division)
 - ✅ Adaptive difficulty (4 levels, streak-based progression)
-- ✅ 15-problem practice sessions
+- ✅ 10-problem practice sessions (Decision 21); a color per operation (Decision 20); a mastered fact answered slowly steps down to Fluent, not back to Learning (Decision 22)
 - ✅ Vertical problem layout (mimics pencil-and-paper format)
 - ✅ In-box feedback with colored borders/backgrounds (✓/✗)
 - ✅ Results screen with summary stats (score, accuracy, total time)
@@ -342,7 +344,7 @@ Managed via CSS classes (no routing library):
 - ✅ Per-fact record across days via Compass (`state` report, `compass_state` launch parameter): sessions aimed at weak and due facts, spaced review, operations graduate and get check-ins (Decision 19)
 
 ### Known Limitations 🔄
-- Progress across sessions needs Compass to keep the `state` report and pass it back (app contract 0.4); until it does, and outside Compass, every exercise starts at Level 1
+- Progress across sessions exists only in Compass runs (Compass keeps the `state` report and passes it back, app contract 0.4, live since 5 Nov 2026); outside Compass every exercise starts at Level 1
 - Mixed mode exists only in Compass runs (on even local days); the stand-alone picker still runs one operation at a time
 - A mixed set reports its operations only near its end (all four finish in the last round), so a learner who stops partway through a mixed set keeps none of it that visit
 - No keyboard shortcuts for operation selection
@@ -362,17 +364,15 @@ Managed via CSS classes (no routing library):
 
 ### High Priority (Aligned with Learning Science)
 
-**1. LocalStorage Progress Tracking**
-- Save per-operation performance data (accuracy, speed, difficulty level)
-- Start sessions at last achieved difficulty level (implements spaced repetition)
-- Track historical performance trends
-- Implementation: ~50 lines of JavaScript, no backend needed
+**1. Progress Tracking on the Stand-Alone Page**
+- Built for Compass runs as a per-fact record with spaced review and graduation (Decision 19), kept by Compass rather than in the browser, which loses it between devices
+- Still to do, if wanted: the same outside Compass
 
 **2. Mixed Practice Mode** (built for Compass runs, Decision 16)
 - Still to do: an "All Operations" button on the stand-alone picker
 
 **3. Visual Progress Indicator**
-- Subtle dots or progress bar (e.g., "●●●○○○○○○○○○○○○" for 3/15)
+- Subtle dots or progress bar (e.g., "●●●○○○○○○○" for 3/10)
 - Non-distracting, helps students gauge progress
 - Could use CSS circles or Unicode characters
 
@@ -445,10 +445,10 @@ Managed via CSS classes (no routing library):
 ### Deployment to GitHub Pages
 1. Make changes to `automath.html`
 2. Copy to `index.html`: `cp automath.html index.html`
-3. Commit: `git add . && git commit -m "description"`
-4. Push: `git push -u origin claude/create-automath-app-icRFe`
-5. Wait 1-2 minutes for GitHub Pages deploy
-6. Verify at `https://<username>.github.io/automath/`
+3. Run `node --test`
+4. Commit on a branch, push, open a pull request to `main` (the test Action must pass)
+5. After the merge, wait 1-2 minutes for GitHub Pages
+6. Verify at `https://sigmaschools.github.io/automath/`
 
 ### Automated Tests
 `node --test` checks the practice rules (the `automath-core` script block) and that `index.html` and `automath.html` match; `node tests/simulate.js` prints how simulated learners move through the levels (add `--accuracy-only` to compare with the rules before Decision 18). `node tests/simulate-days.js` plays model learners through 180 days of warm-ups with the fact record (Decision 19) and prints when each operation graduates. All three run in a GitHub Action on every PR.
@@ -464,17 +464,17 @@ Managed via CSS classes (no routing library):
 - [ ] In-box feedback displays correctly (green ✓ or red ✗ with colored borders)
 - [ ] Cursor disappears during feedback display
 - [ ] Results screen calculates accuracy correctly
-- [ ] Review table shows all 15 problems with correct/incorrect marking
+- [ ] Review table shows all 10 problems with correct/incorrect marking
 - [ ] Review table shows correct answers only for incorrect problems
 - [ ] Time displays correctly (MM:SS format)
 - [ ] "Practice Again" button resets to start screen
 - [ ] Input field auto-focuses after each problem
 - [ ] Enter key submits answers
 - [ ] Horizontal results layout (Score, Accuracy, Time) wraps on mobile
-- [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 15 problems a "Subtraction done ✓" screen with Subtraction's own score, accuracy and time, "One more to go", "Start Division" and Subtraction's 15 problems; Division; the results screen shows Division's own score and 15 problems, a two-row table (Subtraction, Division) and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
+- [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 10 problems a "Subtraction done ✓" screen with Subtraction's own score, accuracy and time, "One more to go", "Start Division" and Subtraction's 10 problems; Division; the results screen shows Division's own score and 10 problems, a two-row table (Subtraction, Division) and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
 - [ ] Unknown names in `compass_parts` are ignored; an empty or all-unknown list gives the normal picker
 - [ ] Compass run of 2+ operations, grouped (`&mode=grouped` or an odd local day): no "Exercise N of M" line or pills; between operations a large blue "Next: <operation> →" button under the score that takes Enter after 0.6 s; Score, Accuracy and Time in blue, teal and violet, matching the summary columns; each `part` report has `index`, `of` and `mode: "grouped"`
-- [ ] Compass run of 2+ operations, mixed (`&mode=mixed` or an even local day): one set of 15 × the operations, progress line "Mixed · Problem N of 60", never the same operation twice in a row, no screen between operations; each operation reported (`mode: "mixed"`, its own 15 items, `seconds` = sum of its response times) the moment its 15th problem is answered; results screen "Mixed practice done ✓" with the set's score, one row per operation in `compass_parts` order and every problem below
+- [ ] Compass run of 2+ operations, mixed (`&mode=mixed` or an even local day): one set of 10 × the operations, progress line "Mixed · Problem N of 40" with all four, never the same operation twice in a row, no screen between operations; each operation reported (`mode: "mixed"`, its own 10 items, `seconds` = sum of its response times) the moment its 10th problem is answered; results screen "Mixed practice done ✓" with the set's score, one row per operation in `compass_parts` order and every problem below
 - [ ] One operation in `compass_parts` always runs grouped
 - [ ] Every Compass run leaves a `kind: "state"` report after each finished operation, with `data`, `due` (an ISO date per operation), `summary` and `fluentMs`
 - [ ] Passing that `data` back as `compass_state` gives fact-chosen sets: the weakest facts come back 2 or 3 times, never within 3 problems of themselves; the results screen shows "<Operation> facts mastered: N of M"
@@ -487,10 +487,8 @@ Managed via CSS classes (no routing library):
 ## Maintenance Notes
 
 ### Code Organization
-- HTML structure: Lines 1-270
-- CSS styles: Lines 7-290
-- JavaScript: Lines 272-630
-- Clear separation of concerns within single file
+- CSS in the head, then the screens' HTML, then three script blocks: `automath-core`, `automath-facts` and the page code
+- Find a function by name rather than by line number; the file grows with each Decision
 
 **Key Functions**:
 - `problemsAt()` / `pickProblem()`: List a level's problems / pick an unseen one
@@ -507,15 +505,12 @@ if (level === 1) pairs(1, 2, 1, a => 3 - a, plus);
 ```
 
 ### Changing Session Length
-Update `totalProblems` variable (line 260):
+Update `SESSION` (and `CHECKIN` for check-ins) at the top of the `automath-facts` block; the page's `totalProblems` follows it:
 ```javascript
-let totalProblems = 15;  // Change this number
+const SESSION = 10;           // problems per operation on a practice day (Decision 21)
 ```
 
-Also update HTML placeholder (line 209):
-```html
-<div class="progress" id="progress">Problem 1 of 15</div>
-```
+Then run `node --test` and `node tests/simulate-days.js` and record the change as a Decision.
 
 ### Adjusting Difficulty Progression Speed
 Modify the streak requirement in `checkAnswer()`:
