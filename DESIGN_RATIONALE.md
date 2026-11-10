@@ -652,6 +652,22 @@ The picker also changed in one way the tests found: a level-1 learner who stayed
 
 **Simulation** (`node tests/simulate-days.js`, at 10 problems per operation): the learner who knows almost every fact graduates on days 55, 91, 48 and 73 (was 62, 99, 49, 87 at 10 problems without this rule); the learner weak on the 8s and 9s on days 71, 103, 97 and 105 (was 78, 100, 102, 116).
 
+### Decision 23: Answer Out Loud (10 November 2026)
+
+**Decision**: A learner can say the answer instead of typing it. A switch under the answer box, "Answer out loud", turns the microphone on; it then reads "I'm listening" and stays on for every problem, and on this device for later visits, until it is tapped off. The number heard goes in the answer box. A heard number that is the right answer is checked after a 250 ms pause (so "four" can still become "fourteen"); any other number is checked when the recognizer decides the learner has stopped talking. The last number said counts, so "five... no, six" is 6. Talk during the tick or the correction is ignored, and the recognizer restarts after each answer so the end of one answer cannot run into the next. The number pad and keyboard work as before, alongside. App version 1.8.0.
+
+**How**: the browser's own speech recognizer (the Web Speech API: Chrome, Edge, Safari on iPad and Mac; not Firefox). No library and no server of ours, so the app stays one file. The switch shows only where the browser has a recognizer. If the microphone is refused or the recognizer keeps failing, the switch turns off and reads "Microphone is off"; tapping it tries again. `<script id="automath-speech">` turns what the recognizer writes ("919", "1,121", "nine hundred nineteen", "for", "it's 12") into a number, and `tests/speech.test.js` checks it against every answer the warm-up can ask for. `voice=1` or `voice=0` in the URL forces the switch.
+
+**Timing**: a spoken answer's time runs from the problem appearing to the moment the recognizer first heard the number that was checked. That includes the time to say it and the recognizer's own delay (a few hundred ms), much as a typed answer's time includes typing it and pressing Enter. The 3 s fluency line (Decisions 18 and 19) is unchanged; each answer in the `part` report now carries `voice: true` when it was spoken, so Compass data can show whether spoken answers need their own line.
+
+**Where the voice goes**: Chrome and Edge send the audio to their speech service unless the browser can recognize speech on the device; newer Chrome can, and Automath asks for that from the second answer on (asking any earlier crashes Chromium that has no speech service). Safari uses Apple's recognizer, on the device where the iPad supports it. Nothing is recorded or kept by Automath.
+
+**Compass**: both Compass shells refused every microphone request from an app. Compass contract 1.2 adds a registry field, `microphone: true`, that lets the shells give an app the microphone on its own pages (sigmaschools/compass-lab, same day). Once that ships in a shell build and Automath's registry entry sets it, spoken answers work in Compass on the iPad. On the Mac they do not yet: Electron has no working speech recognizer (its built-in one needs a Google service key it does not ship with), so the recognizer fails with `network` and the switch turns itself off and reads "Microphone is off". Until then the switch reads the same in Compass.
+
+**Why**: the person running the project shared a video of a young child answering a flashcard app out loud, hands in lap, with "I'm listening" above the number pad. For young learners, saying a fact is faster and closer to recall than finding digits on a pad, and it removes typing speed from the fluency measure.
+
+**Risks**: a misheard number counts as a miss (and a slip in the fact record). Recognizers are good at single numbers, but a noisy classroom or a learner who pauses mid-number ("one hundred... forty-four") can produce a wrong one. Watch the share of spoken misses in Compass data.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
