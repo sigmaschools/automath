@@ -1608,7 +1608,9 @@
                 voice.local = false;  // the on-device model went away: use the browser's usual recognizer
                 return;
             }
-            const refused = ['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(error);
+            // `network`: no speech service behind the recognizer (the Compass shell
+            // on a Mac has none), so retrying cannot help this visit.
+            const refused = ['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported', 'network'].includes(error);
             if (refused || voice.failures >= VOICE_MAX_FAILURES) {
                 voice.on = false;
                 voice.blocked = true;
