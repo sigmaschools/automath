@@ -461,6 +461,60 @@
             margin: 20px auto 20px auto;
         }
 
+        /* Answer out loud (Decision 23): a microphone switch under the answer */
+        .voice {
+            margin: -6px auto 16px auto;
+            text-align: center;
+        }
+
+        .voice.hidden {
+            display: none;
+        }
+
+        #voiceBtn {
+            background: transparent;
+            color: #737373;
+            border: 1px solid #dddddd;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 500;
+            padding: 8px 18px;
+            margin: 0;
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            touch-action: manipulation;
+        }
+
+        #voiceBtn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        #voiceBtn.on {
+            color: #16a34a;
+            border-color: #86efac;
+            background: #f0fdf4;
+        }
+
+        #voiceBtn.on .voice-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #16a34a;
+            animation: voice-pulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes voice-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.25; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #voiceBtn.on .voice-dot { animation: none; }
+        }
+
         /* Fireworks over a score above 85% (Decision 17). Clicks pass through. */
         #fireworks {
             position: fixed;
@@ -506,6 +560,10 @@
                     <input type="number" id="answer" placeholder="?" autocomplete="off">
                     <span class="answer-mark" id="answerMark" aria-hidden="true"></span>
                 </div>
+            </div>
+
+            <div class="voice hidden" id="voice">
+                <button type="button" id="voiceBtn" aria-pressed="false"></button>
             </div>
 
             <div class="keypad hidden" id="keypad">
@@ -1218,6 +1276,90 @@
             };
         })();
     </script>
+    <script id="automath-speech">
+        // Spoken answers (Decision 23): what number a learner said. The browser's
+        // speech recognizer gives text ("919", "1,121", "nine hundred nineteen",
+        // "for", "it's 12"); this turns it into the last whole number in it, or
+        // null when there is none. Kept free of the DOM so tests/ can load it.
+        const AutomathSpeech = (() => {
+            const UNITS = { zero: 0, one: 1, won: 1, two: 2, to: 2, too: 2, three: 3, four: 4, for: 4, fore: 4,
+                five: 5, six: 6, seven: 7, eight: 8, ate: 8, nine: 9 };
+            const TEENS = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+                seventeen: 17, eighteen: 18, nineteen: 19 };
+            const TENS = { twenty: 20, thirty: 30, forty: 40, fourty: 40, fifty: 50, sixty: 60, seventy: 70,
+                eighty: 80, ninety: 90 };
+
+            function classify(token, next) {
+                if (/^\d+$/.test(token)) {
+                    const v = parseInt(token, 10);
+                    if (token.length === 1) return { v, c: 'unit' };
+                    if (v >= 10 && v <= 19 && token.length === 2) return { v, c: 'teen' };
+                    if (v % 10 === 0 && v >= 20 && v <= 90) return { v, c: 'tens' };
+                    return { v, c: 'whole' };
+                }
+                if (token in UNITS) return { v: UNITS[token], c: 'unit' };
+                if (token in TEENS) return { v: TEENS[token], c: 'teen' };
+                if (token in TENS) return { v: TENS[token], c: 'tens' };
+                if (token === 'a' && (next === 'hundred' || next === 'thousand')) return { v: 1, c: 'unit' };
+                if (token === 'hundred' || token === 'thousand' || token === 'and') return { c: token };
+                return null;
+            }
+
+            function parseNumber(text) {
+                if (typeof text !== 'string') return null;
+                const clean = text.toLowerCase()
+                    .replace(/(\d),(?=\d{3})/g, '$1')     // 1,121
+                    .replace(/(\d):(\d\d)/g, '$1$2')       // "1:44" for one forty-four
+                    .replace(/-/g, ' ')
+                    .replace(/[^a-z0-9 ]+/g, ' ');
+                const tokens = clean.split(/\s+/).filter(Boolean);
+                const found = [];
+                let cur = null;  // { total, chunk, last }
+                const flush = () => {
+                    if (cur) found.push(cur.total + cur.chunk);
+                    cur = null;
+                };
+                for (let i = 0; i < tokens.length; i++) {
+                    const t = classify(tokens[i], tokens[i + 1]);
+                    if (!t) { flush(); continue; }
+                    if (t.c === 'and') {
+                        if (!(cur && (cur.last === 'hundred' || cur.last === 'thousand'))) flush();
+                        continue;
+                    }
+                    if (t.c === 'hundred') {
+                        if (cur && cur.chunk > 0 && cur.chunk < 100 && cur.last !== 'hundred') {
+                            cur.chunk *= 100;
+                            cur.last = 'hundred';
+                        } else flush();
+                        continue;
+                    }
+                    if (t.c === 'thousand') {
+                        if (cur && cur.total + cur.chunk > 0 && cur.last !== 'thousand' && cur.total === 0) {
+                            cur.total = (cur.total + cur.chunk) * 1000;
+                            cur.chunk = 0;
+                            cur.last = 'thousand';
+                        } else flush();
+                        continue;
+                    }
+                    if (cur && t.c === 'unit' && cur.last === 'tens') {
+                        cur.chunk += t.v;
+                        cur.last = 'unit';
+                    } else if (cur && t.c !== 'whole' && (cur.last === 'hundred' || cur.last === 'thousand')
+                        && cur.chunk % 100 === 0) {
+                        cur.chunk += t.v;
+                        cur.last = t.c;
+                    } else {
+                        flush();
+                        cur = { total: 0, chunk: t.v, last: t.c };
+                    }
+                }
+                flush();
+                return found.length > 0 ? found[found.length - 1] : null;
+            }
+
+            return { parseNumber };
+        })();
+    </script>
     <script>
         // Compass support (app contract 0.1): `compass_parts` in the URL lists the
         // operations to run, with no picker; each finished operation is reported
@@ -1225,7 +1367,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.7.0';
+        const APP_VERSION = '1.8.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
@@ -1361,12 +1503,214 @@
                 if (key === 'enter') {
                     checkAnswer();
                 } else if (key === 'back') {
+                    voice.heard = null;
                     answerInput.value = answerInput.value.slice(0, -1);
                 } else if (answerInput.value.length < 3) {
                     answerInput.value += key;
                 }
                 if (key !== 'enter') answerInput.focus();
             });
+        }
+
+        // Answer out loud (Decision 23). The browser's own speech recognizer
+        // listens while a problem is on screen. A number it hears goes in the
+        // answer box and is checked as soon as it is the right answer, or when
+        // the learner stops talking. The number pad and keyboard still work.
+        // The switch shows only where the browser can recognize speech, and
+        // stays on between visits on this device. `voice=1` or `voice=0` in the
+        // URL forces it on or off (for testing).
+        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+        const voiceEl = document.getElementById('voice');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const VOICE_KEY = 'automath.voice';
+        const VOICE_LANG = 'en-US';      // AutomathSpeech reads English number words
+        const VOICE_SETTLE_MS = 250;     // a heard right answer waits this long in case the word goes on ("four", "fourteen")
+        const VOICE_MAX_FAILURES = 5;    // errors in a row before the microphone turns off for this visit
+        const MIC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
+        const voice = {
+            on: false,        // the learner wants to answer out loud
+            blocked: false,   // the microphone or recognizer refused this visit
+            local: false,     // the browser recognizes speech on the device itself
+            rec: null, running: false, gen: 0,
+            seen: 0,          // results the current recognizer has given
+            ignoreBelow: 0,   // results that belong to an earlier problem
+            heard: null,      // { n, ms }: the number in the box and when it was first heard
+            settle: null, failures: 0
+        };
+
+        function renderVoice() {
+            if (voice.on) {
+                voiceBtn.className = 'on';
+                voiceBtn.innerHTML = '<span class="voice-dot" aria-hidden="true"></span>I’m listening';
+                voiceBtn.setAttribute('aria-pressed', 'true');
+            } else {
+                voiceBtn.className = '';
+                voiceBtn.innerHTML = MIC_ICON + (voice.blocked ? 'Microphone is off' : 'Answer out loud');
+                voiceBtn.setAttribute('aria-pressed', 'false');
+            }
+        }
+
+        function voiceWanted() {
+            return voice.on && practiceScreen.classList.contains('active') && !document.hidden;
+        }
+
+        function stopVoice() {
+            clearTimeout(voice.settle);
+            if (voice.rec) {
+                voice.gen++;
+                try { voice.rec.abort(); } catch (e) { /* already stopped */ }
+            }
+            voice.rec = null;
+            voice.running = false;
+        }
+
+        // Start or stop the recognizer to match what the page needs now.
+        function voiceSync() {
+            if (!Recognition) return;
+            if (!voiceWanted()) {
+                if (voice.running) stopVoice();
+                return;
+            }
+            if (voice.running) return;
+            const rec = new Recognition();
+            const gen = ++voice.gen;
+            rec.lang = VOICE_LANG;
+            rec.continuous = true;
+            rec.interimResults = true;
+            rec.maxAlternatives = 1;
+            if (voice.local && 'processLocally' in rec) rec.processLocally = true;
+            rec.onresult = (e) => { if (gen === voice.gen) onVoiceResult(e); };
+            rec.onerror = (e) => { if (gen === voice.gen) onVoiceError(e.error); };
+            rec.onend = () => {
+                if (gen !== voice.gen) return;
+                voice.rec = null;
+                voice.running = false;
+                // Recognizers stop on their own after a while; listen again.
+                if (voiceWanted()) setTimeout(voiceSync, Math.min(2000, 250 * voice.failures));
+            };
+            voice.rec = rec;
+            voice.running = true;
+            voice.seen = 0;
+            voice.ignoreBelow = 0;
+            try {
+                rec.start();
+            } catch (e) {
+                voice.rec = null;
+                voice.running = false;
+                onVoiceError('start-failed');
+            }
+        }
+
+        function onVoiceError(error) {
+            if (error === 'no-speech' || error === 'aborted') return;
+            voice.failures++;
+            if (error === 'language-not-supported' && voice.local) {
+                voice.local = false;  // the on-device model went away: use the browser's usual recognizer
+                return;
+            }
+            const refused = ['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported'].includes(error);
+            if (refused || voice.failures >= VOICE_MAX_FAILURES) {
+                voice.on = false;
+                voice.blocked = true;
+                stopVoice();
+                renderVoice();
+            }
+        }
+
+        function onVoiceResult(e) {
+            voice.failures = 0;
+            preferOnDevice();
+            voice.seen = Math.max(voice.seen, e.results.length);
+            if (!awaitingAnswer) {
+                // Talk during the tick or the correction belongs to no problem.
+                voice.ignoreBelow = e.results.length;
+                return;
+            }
+            for (let i = e.results.length - 1; i >= voice.ignoreBelow; i--) {
+                const n = AutomathSpeech.parseNumber(e.results[i][0].transcript);
+                if (n === null) continue;
+                if (!voice.heard || voice.heard.n !== n) voice.heard = { n, ms: responseMs() };
+                answerInput.value = String(n);
+                clearTimeout(voice.settle);
+                if (e.results[i].isFinal) {
+                    submitVoice();
+                } else if (n === currentProblemData.answer) {
+                    voice.settle = setTimeout(submitVoice, VOICE_SETTLE_MS);
+                }
+                return;
+            }
+        }
+
+        function submitVoice() {
+            clearTimeout(voice.settle);
+            if (!awaitingAnswer || !voice.heard) return;
+            answerInput.value = String(voice.heard.n);
+            checkAnswer({ ms: voice.heard.ms });
+        }
+
+        // A new problem is on screen: anything heard so far was for the last one.
+        function voiceProblemShown() {
+            clearTimeout(voice.settle);
+            voice.heard = null;
+            voice.ignoreBelow = voice.seen;
+            voiceSync();
+        }
+
+        // An answer is in: start a fresh recognizer for the next problem, so
+        // words still being spoken do not run into its answer.
+        function voiceAnswered() {
+            clearTimeout(voice.settle);
+            voice.heard = null;
+            if (voice.running) {
+                stopVoice();
+                voiceSync();
+            }
+        }
+
+        function setVoice(on) {
+            voice.on = on;
+            voice.blocked = false;
+            voice.failures = 0;
+            try { localStorage.setItem(VOICE_KEY, on ? '1' : '0'); } catch (e) { /* storage off */ }
+            renderVoice();
+            voiceSync();
+        }
+
+        // Where the browser can recognize speech on the device (newer Chrome),
+        // use that from the next problem on, so the learner's voice stays on
+        // the device. Asked only after the recognizer has heard something:
+        // Chromium without a speech service (headless) crashes on the question.
+        let onDeviceAsked = false;
+        function preferOnDevice() {
+            if (onDeviceAsked || typeof Recognition.available !== 'function') return;
+            onDeviceAsked = true;
+            const options = { langs: [VOICE_LANG], processLocally: true };
+            Promise.resolve()
+                .then(() => Recognition.available(options))
+                .then(status => {
+                    if (status === 'available') {
+                        voice.local = true;
+                    } else if ((status === 'downloadable' || status === 'downloading')
+                        && typeof Recognition.install === 'function') {
+                        // Downloads in the background; until then the browser's usual recognizer listens.
+                        return Recognition.install(options).then(ok => { if (ok) voice.local = true; });
+                    }
+                })
+                .catch(() => { /* not offered */ });
+        }
+
+        if (Recognition) {
+            voiceEl.classList.remove('hidden');
+            const forced = urlParams.get('voice');
+            let saved = null;
+            try { saved = localStorage.getItem(VOICE_KEY); } catch (e) { /* storage off */ }
+            voice.on = forced === '1' || (forced !== '0' && saved === '1');
+            renderVoice();
+            voiceBtn.addEventListener('click', () => {
+                setVoice(!voice.on);
+                if (!useKeypad) answerInput.focus();
+            });
+            document.addEventListener('visibilitychange', voiceSync);
         }
 
         function newCounts() {
@@ -1480,6 +1824,7 @@
             problemShownAt = Date.now();
             problemHiddenMs = 0;
             awaitingAnswer = true;
+            voiceProblemShown();
         }
 
         answerInput.addEventListener('keypress', (e) => {
@@ -1499,13 +1844,16 @@
             }
         }
 
-        function checkAnswer() {
+        // `spoken` is set for an answer said out loud: { ms } from the problem
+        // appearing to the number being heard.
+        function checkAnswer(spoken) {
             if (!awaitingAnswer) return;
             const userAnswer = parseInt(answerInput.value);
             if (isNaN(userAnswer)) return;
             awaitingAnswer = false;
+            voiceAnswered();
 
-            const ms = responseMs();
+            const ms = spoken ? spoken.ms : responseMs();
             const isCorrect = userAnswer === currentProblemData.answer;
             showFeedback(isCorrect);
             const wait = isCorrect ? FEEDBACK_MS : CORRECTION_MS;
@@ -1531,7 +1879,8 @@
                 userAnswer: userAnswer,
                 isCorrect: isCorrect,
                 fluent: fluent,
-                ms: ms
+                ms: ms,
+                voice: !!spoken
             });
 
             const s = opState[selectedOperation];
@@ -1687,6 +2036,7 @@
                     correct: item.isCorrect,
                     fluent: item.fluent,
                     ms: item.ms,
+                    voice: item.voice || undefined,
                     outlier: item.ms != null && item.ms > AutomathCore.OUTLIER_MS
                 })),
                 appVersion: APP_VERSION
@@ -1697,6 +2047,7 @@
         function showPartScreen() {
             practiceScreen.classList.remove('active');
             partScreen.classList.add('active');
+            voiceSync();
             const left = compassParts.slice(partIndex + 1).map(p => OPERATION_NAMES[p]);
             const part = runParts[runParts.length - 1];
             document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
@@ -1839,6 +2190,7 @@
         function showResults() {
             practiceScreen.classList.remove('active');
             resultsScreen.classList.add('active');
+            voiceSync();
 
             // Every screen shows the exercise just finished: its own score and its
             // own problems. In Compass mode a table of every exercise in this

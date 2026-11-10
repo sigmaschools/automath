@@ -1,5 +1,5 @@
-// Loads the practice rules (the <script id="automath-core"> and
-// <script id="automath-facts"> blocks of index.html) into Node, with no
+// Loads the practice rules (the <script id="automath-core">,
+// <script id="automath-facts"> and <script id="automath-speech"> blocks of index.html) into Node, with no
 // browser. Nothing else in the page runs.
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +22,15 @@ function loadAll(file = 'index.html') {
     return { core: context.AutomathCore, facts: context.AutomathFacts };
 }
 
+// The spoken-answer reader (<script id="automath-speech">), on its own.
+function loadSpeech(file = 'index.html') {
+    const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    const context = { Number, String, Object };
+    vm.createContext(context);
+    vm.runInContext(`${block(html, 'automath-speech', file)}\nthis.AutomathSpeech = AutomathSpeech;`, context);
+    return context.AutomathSpeech;
+}
+
 function loadCore(file = 'index.html') {
     return loadAll(file).core;
 }
@@ -42,4 +51,4 @@ function seeded(seed) {
     };
 }
 
-module.exports = { loadCore, loadFacts, seeded, ROOT };
+module.exports = { loadCore, loadFacts, loadSpeech, seeded, ROOT };
