@@ -686,6 +686,24 @@ App version 1.9.0.
 
 **Why**: Compass issue #19. The browser recognizer cannot work in the Mac app, and a recognizer told only number words, on the device, is more accurate for a child's short answer. Rule 3 removes Decision 23's main risk.
 
+### Decision 25: A Live Waveform Instead of the Number Pad While Answering Out Loud (11 November 2026)
+
+**Decision**: While "Answer out loud" is on, a live waveform of the learner's voice takes the number pad's place, like the dictation display on a phone. The bars rise as the learner speaks and fall to a row of dots in silence, in the colour of the operation on screen. The waveform is the only sign that the microphone is on: the "I'm listening" switch is gone while voice is on, and the tap-to-talk button no longer pulses. Choices where the request met existing behaviour:
+
+- **Going back to typing.** A "Type instead" button under the waveform turns voice off (remembered on this device, as the switch was) and brings the number pad back. With voice off, the "Answer out loud" switch is above the pad as before.
+- **A misheard number (rule 3, Decision 24).** With no number pad there is no Enter key, so while a heard number that is not the answer waits in the box, a large Enter button appears under the waveform. Saying the answer again still replaces it; typing over it means "Type instead", or a keyboard where there is one.
+- **Getting ready.** While the recognizer loads, the dots are dimmed and "Getting ready…" shows under them, so the learner knows to wait before speaking.
+- **Tap-to-talk** (Compass, voice off): tapping the microphone in the answer box shows the waveform in the pad's place until the one answer is heard or the microphone goes off, then the pad returns.
+- On a computer (no number pad) the waveform shows in the same place, and the keyboard works as before.
+
+App version 1.10.0.
+
+**How**: the bars follow loudness, not words. The page asks the Compass voice kit's listener for `level` (0 to 1) if it offers one; today's kit does not, so the page opens its own meter on the microphone (an analyser on a second `getUserMedia` stream with the kit's settings) only while the recognizer is listening, and closes it when listening stops, the page is hidden or the learner leaves the practice screen. If the meter cannot open, the bars breathe gently so listening still shows. With the browser recognizer, an `audio-capture` error while the meter is open closes the meter for the visit instead of turning voice off.
+
+**Tests**: checked in Chromium with a fake microphone, a stand-in kit and a stand-in browser recognizer: the pad hides and the waveform shows when voice turns on, "Getting ready…" while preparing, Enter appears for a held wrong number and confirms it, a right answer moves on, "Type instead" brings the pad back and releases the microphone, and tap-to-talk swaps the pad for the waveform. Still to check: on the iPad in Compass, that the second microphone stream does not disturb the kit's recognizer and that the bars move with a child's voice.
+
+**Why**: the person running the project tried voice on an iPad and found the number pad awkward while answering out loud. A waveform shows at once that voice is on and that the learner is being heard, which a static label cannot.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
