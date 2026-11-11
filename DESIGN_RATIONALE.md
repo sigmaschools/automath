@@ -668,6 +668,24 @@ The picker also changed in one way the tests found: a level-1 learner who stayed
 
 **Risks**: a misheard number counts as a miss (and a slip in the fact record). Recognizers are good at single numbers, but a noisy classroom or a learner who pauses mid-number ("one hundred... forty-four") can produce a wrong one. Watch the share of spoken misses in Compass data.
 
+### Decision 24: Answer Out Loud With the Compass Voice Kit (11 November 2026)
+
+**Decision**: In Compass, "Answer out loud" listens with the Compass voice kit (app contract 1.5, section 15) instead of the browser's speech recognizer, so it works in the Mac app (Electron has no recognizer) and behaves the same on the iPad. Three behaviours change with it, everywhere voice is used:
+
+- **A mishearing is never a miss.** A heard number that is the right answer counts at once. Any other number stays in the answer box, unmarked, until the learner confirms it with Enter, says the answer again or types over it. Only a confirmed or typed answer is recorded as wrong. The response time keeps running meanwhile, as it does while a learner thinks. (Decision 23 checked any final number, so a misheard number was a miss and a slip in the fact record.) This applies to the browser recognizer on the public page too.
+- **The first number said counts** with the kit ("seven, no, eight" holds 7 for confirming), so saying several numbers is not a way to guess. The browser recognizer keeps the last number, as before.
+- **Tap-to-talk.** In Compass a microphone button sits at the right of the answer box while hands-free is off: tap it, say one answer, and the microphone goes off again. It works better than hands-free where other people are talking. When others keep talking near the microphone during hands-free (the kit's `room.others` rises by 3), the app says once: "It's noisy here. Tap the microphone when you answer."
+
+App version 1.9.0.
+
+**How**: the kit is one script, `<compass server>/kit/voice/1/compass-voice.js`, loaded only when the learner first wants voice (the switch, or the tap button). The server is the `iss` of the student's profile note after the `#` (contract 1.4, section 1.1), and the script is loaded only when that server is on the app's own list, `KIT_SERVERS` (today the staging server). An address that only a link supplied is never loaded. If the script does not load, or the kit reports `blocked` or `unavailable`, the switch turns off, reads "Microphone is off", and says once "Voice isn't working here. Typing works." While the kit fetches its recognizer (about 35 MB the first time on a device, then a second or two) the switch reads "Getting ready to listen"; turning the switch on calls `CompassVoice.prepare()` so the first problem does not wait. The kit pauses itself while the page is hidden, restarts itself, ignores the microphone while it speaks, and times an answer from when it was said (`heard.at`), so the app's own restart and failure handling is used only by the browser recognizer. Outside Compass (no profile note, or a server not on the list) the public page keeps the browser recognizer and has no tap-to-talk.
+
+**Reports**: each `part` item answered aloud has `voice: true` (a heard number confirmed with Enter counts as aloud), and `heard` with the words when what was heard was not simply the answer recorded (for example a held 7 that the learner typed over with 4). Compass ignores both today; they are how Compass data can later show whether voice helps and how often it mishears.
+
+**Tests**: `tests/speech.test.js` checks rule 3 (`AutomathSpeech.decide`), the `heard` note and reading the server from the profile note. The page was checked in Chromium with a stand-in kit: hands-free and tap-to-talk, a right answer before the learner stops talking, a held wrong number confirmed, said again and typed over, the noisy-room note, `blocked`, and a listed server whose kit cannot be fetched. Still to check: the real kit with a recorded voice (the kit's own `appkit/voice/e2e` tests are the pattern), and by ear on the Mac in the Compass app as the test learner, once the kit is on staging and the shells pass the profile note.
+
+**Why**: Compass issue #19. The browser recognizer cannot work in the Mac app, and a recognizer told only number words, on the device, is more accurate for a child's short answer. Rule 3 removes Decision 23's main risk.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

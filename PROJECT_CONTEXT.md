@@ -343,6 +343,7 @@ Managed via CSS classes (no routing library):
 - ✅ Fluency (correct within 3 s) drives levelling up and is reported; misses show the right answer and come back once; level 4 is facts crossing ten; hidden-page time not counted; on-screen number pad on touch screens; `node --test` and a simulator in `tests/` (Decision 18)
 - ✅ Per-fact record across days via Compass (`state` report, `compass_state` launch parameter): sessions aimed at weak and due facts, spaced review, operations graduate and get check-ins (Decision 19)
 - ✅ Answer out loud: a microphone switch under the answer where the browser can recognize speech (Chrome, Edge, Safari); the number heard goes in the box and is checked; remembered per device; `voice=1`/`voice=0` forces it (Decision 23). Not yet inside Compass: both Compass shells deny the microphone
+- ✅ In Compass, answers out loud use the Compass voice kit (contract 1.5), loaded from a listed Compass server named in the profile note; a misheard number waits for the learner instead of counting as a miss; tap-to-talk beside the answer box (Decision 24)
 
 ### Known Limitations 🔄
 - Progress across sessions exists only in Compass runs (Compass keeps the `state` report and passes it back, app contract 0.4, live since 5 Nov 2026); outside Compass every exercise starts at Level 1

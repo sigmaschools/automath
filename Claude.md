@@ -73,7 +73,7 @@ Before implementing any change, ask:
 - Single HTML file (zero dependencies)
 - Adaptive progressive difficulty (4 levels)
 - 10 problems per operation (Decision 21)
-- Answers typed, tapped on the number pad, or said out loud (Decision 23)
+- Answers typed, tapped on the number pad, or said out loud (Decisions 23 and 24)
 - No timers during practice (reduces anxiety)
 - Clean, minimal UI (black text on white)
 - ~2-4 minute sessions per operation

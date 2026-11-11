@@ -506,13 +506,70 @@
             animation: voice-pulse 1.2s ease-in-out infinite;
         }
 
+        #voiceBtn.on.preparing .voice-dot,
+        .mic-btn.on.preparing {
+            animation: none;
+            opacity: 0.5;
+        }
+
+        .voice-note {
+            margin-top: 8px;
+            font-size: 15px;
+            color: #737373;
+        }
+
+        .voice-note.hidden {
+            display: none;
+        }
+
+        /* Tap-to-talk (Decision 24): one answer out loud, beside the answer box */
+        .mic-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 52px;
+            height: 52px;
+            min-width: 0;
+            padding: 0;
+            margin: 0;
+            border-radius: 50%;
+            border: 1px solid #dddddd;
+            background: #ffffff;
+            color: #737373;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+
+        .input-container:has(.mic-btn:not(.hidden)) input[type="number"] {
+            padding-right: 76px;
+        }
+
+        .mic-btn.hidden {
+            display: none;
+        }
+
+        .mic-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .mic-btn.on {
+            color: #16a34a;
+            border-color: #86efac;
+            background: #f0fdf4;
+            animation: voice-pulse 1.2s ease-in-out infinite;
+        }
+
         @keyframes voice-pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.25; }
         }
 
         @media (prefers-reduced-motion: reduce) {
-            #voiceBtn.on .voice-dot { animation: none; }
+            #voiceBtn.on .voice-dot, .mic-btn.on { animation: none; }
         }
 
         /* Fireworks over a score above 85% (Decision 17). Clicks pass through. */
@@ -559,11 +616,13 @@
                 <div class="input-container">
                     <input type="number" id="answer" placeholder="?" autocomplete="off">
                     <span class="answer-mark" id="answerMark" aria-hidden="true"></span>
+                    <button type="button" class="mic-btn hidden" id="micBtn" aria-label="Tap and say the answer" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg></button>
                 </div>
             </div>
 
             <div class="voice hidden" id="voice">
                 <button type="button" id="voiceBtn" aria-pressed="false"></button>
+                <div class="voice-note hidden" id="voiceNote" role="status"></div>
             </div>
 
             <div class="keypad hidden" id="keypad">
@@ -1357,7 +1416,43 @@
                 return found.length > 0 ? found[found.length - 1] : null;
             }
 
-            return { parseNumber };
+            // What to do with a number heard for the problem on screen (Compass
+            // app contract 1.5, section 15, rule 3): the right answer counts at
+            // once; any other number waits in the box, once the learner has
+            // stopped talking, for them to confirm (Enter), say again or type
+            // over. A mishearing is never recorded as a miss on its own.
+            function decide(heard, final, answer) {
+                if (heard === answer) return 'accept';
+                return final ? 'hold' : 'wait';
+            }
+
+            // The `heard` text for a report item (rule 8): what was said, when it
+            // was not simply the answer recorded. `values` are the numbers in it.
+            function heardNote(heard, recorded) {
+                if (!heard || !Array.isArray(heard.values)) return undefined;
+                if (heard.values.length === 1 && heard.values[0] === recorded) return undefined;
+                return heard.text || undefined;
+            }
+
+            // The Compass server that launched the app: the `iss` of the
+            // student's profile note after the `#` (contract 1.4, section 1.1).
+            // Read, not checked: the page only uses it to choose among servers
+            // it already lists. Null without a readable note.
+            function profileIssuer(hash, decode) {
+                try {
+                    const token = new URLSearchParams(String(hash || '').replace(/^#/, '')
+                        .replace(/^.*?(?=compass_profile=)/, '')).get('compass_profile');
+                    const middle = token && token.split('.')[1];
+                    if (!middle) return null;
+                    const b64 = middle.replace(/-/g, '+').replace(/_/g, '/');
+                    const claims = JSON.parse(decode(b64 + '==='.slice((b64.length + 3) % 4)));
+                    return claims && typeof claims.iss === 'string' ? claims.iss : null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            return { parseNumber, decide, heardNote, profileIssuer };
         })();
     </script>
     <script>
@@ -1367,7 +1462,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.8.0';
+        const APP_VERSION = '1.9.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
@@ -1503,8 +1598,12 @@
                 if (key === 'enter') {
                     checkAnswer();
                 } else if (key === 'back') {
-                    voice.heard = null;
+                    voiceTyped();
                     answerInput.value = answerInput.value.slice(0, -1);
+                } else if (voice.held) {
+                    // A digit over a heard number that is waiting replaces it.
+                    voiceTyped();
+                    answerInput.value = key;
                 } else if (answerInput.value.length < 3) {
                     answerInput.value += key;
                 }
@@ -1512,47 +1611,264 @@
             });
         }
 
-        // Answer out loud (Decision 23). The browser's own speech recognizer
-        // listens while a problem is on screen. A number it hears goes in the
-        // answer box and is checked as soon as it is the right answer, or when
-        // the learner stops talking. The number pad and keyboard still work.
-        // The switch shows only where the browser can recognize speech, and
-        // stays on between visits on this device. `voice=1` or `voice=0` in the
-        // URL forces it on or off (for testing).
+        // Answer out loud (Decision 23, Decision 24). A number heard goes in the
+        // answer box. The right answer counts at once; any other number waits
+        // there for the learner to confirm with Enter, say again or type over
+        // (a mishearing is never a miss on its own). The number pad and keyboard
+        // still work. The switch stays on between visits on this device.
+        // `voice=1` or `voice=0` in the URL forces it on or off (for testing).
+        //
+        // Two ways to hear:
+        // - In Compass, the Compass voice kit (app contract 1.5, section 15): a
+        //   recognizer inside the page, on the device, told only the number
+        //   words. It works in the Mac app, which has no browser recognizer.
+        //   The kit is loaded, when the learner first wants voice, from the
+        //   Compass server that launched the app, and only from a server on
+        //   KIT_SERVERS. A tap-to-talk microphone sits beside the answer box.
+        // - Elsewhere (the public page), the browser's own speech recognizer.
+        const KIT_SERVERS = ['https://compass-staging-118157882285.us-east4.run.app'];
+        const KIT_PATH = '/kit/voice/1/compass-voice.js';
+        const kitServer = (() => {
+            const iss = AutomathSpeech.profileIssuer(window.location.hash, (b) => atob(b));
+            return iss && KIT_SERVERS.includes(iss) ? iss : null;
+        })();
         const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+        // `kit` when Compass launched the app from a listed server (or the page
+        // already has the kit), `browser` where the browser can recognize
+        // speech, otherwise null and no switch.
+        const voiceEngine = (kitServer || window.CompassVoice) ? 'kit' : (Recognition ? 'browser' : null);
         const voiceEl = document.getElementById('voice');
         const voiceBtn = document.getElementById('voiceBtn');
+        const voiceNote = document.getElementById('voiceNote');
+        const micBtn = document.getElementById('micBtn');
         const VOICE_KEY = 'automath.voice';
         const VOICE_LANG = 'en-US';      // AutomathSpeech reads English number words
-        const VOICE_SETTLE_MS = 250;     // a heard right answer waits this long in case the word goes on ("four", "fourteen")
-        const VOICE_MAX_FAILURES = 5;    // errors in a row before the microphone turns off for this visit
+        const VOICE_SETTLE_MS = 250;     // browser: a heard right answer waits this long in case the word goes on ("four", "fourteen")
+        const VOICE_MAX_FAILURES = 5;    // browser: errors in a row before the microphone turns off for this visit
+        const NOISY_OTHERS = 3;          // kit: talk without an answer in it, this many times, before suggesting tap-to-talk
         const MIC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
         const voice = {
-            on: false,        // the learner wants to answer out loud
+            on: false,        // the learner wants to answer out loud (hands-free)
             blocked: false,   // the microphone or recognizer refused this visit
-            local: false,     // the browser recognizes speech on the device itself
+            unavailable: false, // kit: this device cannot listen; typing works
+            state: null,      // kit: the hands-free listener's state
+            ear: null,        // kit: the hands-free listener
+            tap: null,        // kit: a tap-to-talk listener, while it listens
+            tapState: null,
+            othersBase: 0, noisyShown: false,
+            local: false,     // browser: it recognizes speech on the device itself
             rec: null, running: false, gen: 0,
-            seen: 0,          // results the current recognizer has given
-            ignoreBelow: 0,   // results that belong to an earlier problem
-            heard: null,      // { n, ms }: the number in the box and when it was first heard
+            seen: 0,          // browser: results the current recognizer has given
+            ignoreBelow: 0,   // browser: results that belong to an earlier problem
+            heard: null,      // browser: { n, ms, text }: the number in the box and when it was first heard
+            held: null,       // { n, text, values }: a heard number that is not the answer, waiting in the box
+            last: null,       // { values, text }: what was last heard for this problem, for the report
             settle: null, failures: 0
         };
 
+        // The largest answer of each operation's facts, so the kit can report a
+        // number without waiting to hear whether it grows ("seven" → "seventy").
+        const MAX_ANSWER = {};
+        OPERATIONS.forEach(op => {
+            let max = 0;
+            for (let level = 1; level <= 4; level++) {
+                AutomathCore.problemsAt(op, level).forEach(p => { if (p.answer > max) max = p.answer; });
+            }
+            MAX_ANSWER[op] = max || 144;
+        });
+        function maxAnswer() {
+            return MAX_ANSWER[selectedOperation] || 144;
+        }
+
         function renderVoice() {
             if (voice.on) {
-                voiceBtn.className = 'on';
-                voiceBtn.innerHTML = '<span class="voice-dot" aria-hidden="true"></span>I’m listening';
+                const preparing = voice.state === 'preparing';
+                voiceBtn.className = preparing ? 'on preparing' : 'on';
+                voiceBtn.innerHTML = '<span class="voice-dot" aria-hidden="true"></span>'
+                    + (preparing ? 'Getting ready to listen' : 'I’m listening');
                 voiceBtn.setAttribute('aria-pressed', 'true');
             } else {
                 voiceBtn.className = '';
-                voiceBtn.innerHTML = MIC_ICON + (voice.blocked ? 'Microphone is off' : 'Answer out loud');
+                voiceBtn.innerHTML = MIC_ICON + (voice.blocked || voice.unavailable ? 'Microphone is off' : 'Answer out loud');
                 voiceBtn.setAttribute('aria-pressed', 'false');
             }
+            // Tap-to-talk: kit only, while hands-free is off and the device can listen.
+            const tapShown = voiceEngine === 'kit' && !voice.on && !voice.blocked && !voice.unavailable;
+            micBtn.classList.toggle('hidden', !tapShown);
+            const tapOn = !!voice.tap && voice.tapState !== 'off';
+            micBtn.classList.toggle('on', tapOn);
+            micBtn.classList.toggle('preparing', tapOn && voice.tapState === 'preparing');
+            micBtn.setAttribute('aria-pressed', tapOn ? 'true' : 'false');
+        }
+
+        function showVoiceNote(text) {
+            voiceNote.textContent = text || '';
+            voiceNote.classList.toggle('hidden', !text);
         }
 
         function voiceWanted() {
             return voice.on && practiceScreen.classList.contains('active') && !document.hidden;
         }
+
+        // A number was heard for the problem on screen. `ms` is the response
+        // time to when it was said; `heard` is { values, text } for the report.
+        function voiceHeard(n, final, ms, heard) {
+            if (!awaitingAnswer) return;
+            voice.last = heard;
+            answerInput.value = String(n);
+            const decision = AutomathSpeech.decide(n, final, currentProblemData.answer);
+            if (decision === 'accept') {
+                voice.held = null;
+                checkAnswer({ ms, heard });
+            } else if (decision === 'hold') {
+                // Shown, not marked: Enter confirms it, saying it again or typing replaces it.
+                voice.held = { n, heard };
+                if (!useKeypad) answerInput.select();
+            } else {
+                voice.held = null;
+            }
+        }
+
+        // The learner typed or tapped over a held number: it is theirs now.
+        function voiceTyped() {
+            voice.held = null;
+            voice.heard = null;
+        }
+
+        // ---- The Compass voice kit ----
+
+        let kitLoading = null;
+        function loadKit() {
+            if (window.CompassVoice) return Promise.resolve(true);
+            if (!kitServer) return Promise.resolve(false);
+            if (!kitLoading) {
+                kitLoading = new Promise(resolve => {
+                    const script = document.createElement('script');
+                    script.src = kitServer + KIT_PATH;
+                    script.onload = () => resolve(!!window.CompassVoice);
+                    script.onerror = () => resolve(false);
+                    document.head.appendChild(script);
+                });
+            }
+            return kitLoading;
+        }
+
+        // The kit cannot listen here: say once that typing works, switch off.
+        function kitUnavailable(blocked) {
+            stopKit();
+            voice.on = false;
+            if (blocked) voice.blocked = true; else voice.unavailable = true;
+            renderVoice();
+            showVoiceNote('Voice isn’t working here. Typing works.');
+        }
+
+        function stopKit() {
+            if (voice.ear) { try { voice.ear.stop(); } catch (e) { /* stopped */ } }
+            voice.ear = null;
+            voice.state = null;
+            stopTap();
+        }
+
+        function stopTap() {
+            if (voice.tap) { try { voice.tap.stop(); } catch (e) { /* stopped */ } }
+            voice.tap = null;
+            voice.tapState = null;
+        }
+
+        function onKitState(state, isTap) {
+            if (state === 'blocked' || state === 'unavailable') {
+                kitUnavailable(state === 'blocked');
+                return;
+            }
+            if (isTap) {
+                voice.tapState = state;
+                if (state === 'off') voice.tap = null;
+            } else {
+                voice.state = state;
+            }
+            renderVoice();
+        }
+
+        function onKitHeard(heard) {
+            if (!awaitingAnswer || !heard || !Array.isArray(heard.values) || heard.values.length === 0) return;
+            // Timed practice: the first number said counts (rule 4).
+            const n = heard.values[0];
+            voiceHeard(n, !!heard.final, msAt(heard.at), { values: heard.values.slice(), text: heard.text });
+        }
+
+        // Response time to a moment given in performance.now() time.
+        function msAt(at) {
+            const ms = responseMs();
+            if (ms === null || typeof at !== 'number') return ms;
+            return Math.round(Math.max(0, ms - Math.max(0, performance.now() - at)));
+        }
+
+        // Start or stop the hands-free listener to match the page. The kit
+        // pauses itself while the page is hidden and restarts itself.
+        function kitSync() {
+            const wanted = voice.on && practiceScreen.classList.contains('active');
+            if (!wanted) {
+                if (voice.ear || voice.tap) { stopKit(); renderVoice(); }
+                return;
+            }
+            if (voice.ear) return;
+            stopTap();
+            voice.state = 'preparing';
+            renderVoice();
+            loadKit().then(ok => {
+                if (!ok) { kitUnavailable(false); return; }
+                if (voice.ear || !voice.on || !practiceScreen.classList.contains('active')) return;
+                try {
+                    voice.ear = CompassVoice.listen({
+                        expect: 'number',
+                        max: maxAnswer(),
+                        onState: (state) => onKitState(state, false),
+                        onHeard: onKitHeard
+                    });
+                    voice.othersBase = voice.ear.room ? voice.ear.room.others : 0;
+                    if (voice.ear.state) onKitState(voice.ear.state, false);
+                } catch (e) {
+                    kitUnavailable(false);
+                }
+            });
+        }
+
+        // Tap-to-talk: one answer, then the microphone goes off again. Best in a
+        // room where other people are talking.
+        function tapToTalk() {
+            if (!awaitingAnswer) return;
+            if (voice.tap) { stopTap(); renderVoice(); return; }
+            voice.tapState = 'preparing';
+            voice.tap = {};  // holds the place while the kit loads
+            renderVoice();
+            loadKit().then(ok => {
+                if (!ok) { kitUnavailable(false); return; }
+                if (!voice.tap || voice.tap.stop) return;  // tapped off meanwhile
+                try {
+                    voice.tap = CompassVoice.listen({
+                        expect: 'number',
+                        once: true,
+                        max: maxAnswer(),
+                        onState: (state) => onKitState(state, true),
+                        onHeard: onKitHeard
+                    });
+                    if (voice.tap && voice.tap.state) onKitState(voice.tap.state, true);
+                } catch (e) {
+                    kitUnavailable(false);
+                }
+            });
+        }
+
+        // Others keep talking near the microphone: suggest tap-to-talk, once.
+        function checkNoise() {
+            if (voice.noisyShown || !voice.ear || !voice.ear.room) return;
+            if (voice.ear.room.others - voice.othersBase >= NOISY_OTHERS) {
+                voice.noisyShown = true;
+                showVoiceNote('It’s noisy here. Tap the microphone when you answer.');
+            }
+        }
+
+        // ---- The browser's recognizer (outside Compass) ----
 
         function stopVoice() {
             clearTimeout(voice.settle);
@@ -1564,8 +1880,9 @@
             voice.running = false;
         }
 
-        // Start or stop the recognizer to match what the page needs now.
+        // Start or stop the listening to match what the page needs now.
         function voiceSync() {
+            if (voiceEngine === 'kit') { kitSync(); return; }
             if (!Recognition) return;
             if (!voiceWanted()) {
                 if (voice.running) stopVoice();
@@ -1608,8 +1925,8 @@
                 voice.local = false;  // the on-device model went away: use the browser's usual recognizer
                 return;
             }
-            // `network`: no speech service behind the recognizer (the Compass shell
-            // on a Mac has none), so retrying cannot help this visit.
+            // `network`: no speech service behind the recognizer, so retrying
+            // cannot help this visit.
             const refused = ['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported', 'network'].includes(error);
             if (refused || voice.failures >= VOICE_MAX_FAILURES) {
                 voice.on = false;
@@ -1629,9 +1946,11 @@
                 return;
             }
             for (let i = e.results.length - 1; i >= voice.ignoreBelow; i--) {
-                const n = AutomathSpeech.parseNumber(e.results[i][0].transcript);
+                const text = e.results[i][0].transcript;
+                const n = AutomathSpeech.parseNumber(text);
                 if (n === null) continue;
-                if (!voice.heard || voice.heard.n !== n) voice.heard = { n, ms: responseMs() };
+                if (!voice.heard || voice.heard.n !== n) voice.heard = { n, ms: responseMs(), text };
+                voice.heard.text = text;
                 answerInput.value = String(n);
                 clearTimeout(voice.settle);
                 if (e.results[i].isFinal) {
@@ -1646,36 +1965,8 @@
         function submitVoice() {
             clearTimeout(voice.settle);
             if (!awaitingAnswer || !voice.heard) return;
-            answerInput.value = String(voice.heard.n);
-            checkAnswer({ ms: voice.heard.ms });
-        }
-
-        // A new problem is on screen: anything heard so far was for the last one.
-        function voiceProblemShown() {
-            clearTimeout(voice.settle);
-            voice.heard = null;
-            voice.ignoreBelow = voice.seen;
-            voiceSync();
-        }
-
-        // An answer is in: start a fresh recognizer for the next problem, so
-        // words still being spoken do not run into its answer.
-        function voiceAnswered() {
-            clearTimeout(voice.settle);
-            voice.heard = null;
-            if (voice.running) {
-                stopVoice();
-                voiceSync();
-            }
-        }
-
-        function setVoice(on) {
-            voice.on = on;
-            voice.blocked = false;
-            voice.failures = 0;
-            try { localStorage.setItem(VOICE_KEY, on ? '1' : '0'); } catch (e) { /* storage off */ }
-            renderVoice();
-            voiceSync();
+            const h = voice.heard;
+            voiceHeard(h.n, true, h.ms, { values: [h.n], text: h.text });
         }
 
         // Where the browser can recognize speech on the device (newer Chrome),
@@ -1701,7 +1992,64 @@
                 .catch(() => { /* not offered */ });
         }
 
-        if (Recognition) {
+        // ---- Both ----
+
+        // A new problem is on screen: anything heard so far was for the last one.
+        function voiceProblemShown() {
+            clearTimeout(voice.settle);
+            voice.heard = null;
+            voice.held = null;
+            voice.last = null;
+            if (voiceEngine === 'kit') {
+                stopTap();
+                renderVoice();
+                if (voice.ear) {
+                    try { voice.ear.next({ max: maxAnswer() }); } catch (e) { /* stopped */ }
+                    checkNoise();
+                }
+            } else {
+                voice.ignoreBelow = voice.seen;
+            }
+            voiceSync();
+        }
+
+        // An answer is in. Browser: start a fresh recognizer for the next
+        // problem, so words still being spoken do not run into its answer.
+        // (The kit forgets them itself at next().)
+        function voiceAnswered() {
+            clearTimeout(voice.settle);
+            voice.heard = null;
+            voice.held = null;
+            if (voiceEngine === 'kit') {
+                if (voice.tap) { stopTap(); renderVoice(); }
+                return;
+            }
+            if (voice.running) {
+                stopVoice();
+                voiceSync();
+            }
+        }
+
+        function setVoice(on) {
+            voice.on = on;
+            voice.blocked = false;
+            voice.unavailable = false;
+            voice.failures = 0;
+            showVoiceNote('');
+            try { localStorage.setItem(VOICE_KEY, on ? '1' : '0'); } catch (e) { /* storage off */ }
+            if (on && voiceEngine === 'kit') {
+                // Fetch the recognizer now, so the first problem does not wait.
+                loadKit().then(ok => {
+                    if (ok && window.CompassVoice && typeof CompassVoice.prepare === 'function') {
+                        Promise.resolve(CompassVoice.prepare()).catch(() => { /* reported through onState */ });
+                    }
+                });
+            }
+            renderVoice();
+            voiceSync();
+        }
+
+        if (voiceEngine) {
             voiceEl.classList.remove('hidden');
             const forced = urlParams.get('voice');
             let saved = null;
@@ -1712,7 +2060,12 @@
                 setVoice(!voice.on);
                 if (!useKeypad) answerInput.focus();
             });
-            document.addEventListener('visibilitychange', voiceSync);
+            micBtn.addEventListener('click', () => {
+                tapToTalk();
+                if (!useKeypad) answerInput.focus();
+            });
+            answerInput.addEventListener('input', voiceTyped);
+            if (voiceEngine === 'browser') document.addEventListener('visibilitychange', voiceSync);
         }
 
         function newCounts() {
@@ -1846,12 +2199,17 @@
             }
         }
 
-        // `spoken` is set for an answer said out loud: { ms } from the problem
-        // appearing to the number being heard.
+        // `spoken` is set for an answer said out loud: { ms, heard } with the
+        // time from the problem appearing to the number being said. A heard
+        // number the learner confirms with Enter is spoken too, timed to Enter.
         function checkAnswer(spoken) {
             if (!awaitingAnswer) return;
             const userAnswer = parseInt(answerInput.value);
             if (isNaN(userAnswer)) return;
+            if (!spoken && voice.held && voice.held.n === userAnswer) {
+                spoken = { ms: responseMs(), heard: voice.held.heard };
+            }
+            const heard = AutomathSpeech.heardNote(spoken ? spoken.heard : voice.last, userAnswer);
             awaitingAnswer = false;
             voiceAnswered();
 
@@ -1882,7 +2240,8 @@
                 isCorrect: isCorrect,
                 fluent: fluent,
                 ms: ms,
-                voice: !!spoken
+                voice: !!spoken,
+                heard: heard
             });
 
             const s = opState[selectedOperation];
@@ -2039,6 +2398,7 @@
                     fluent: item.fluent,
                     ms: item.ms,
                     voice: item.voice || undefined,
+                    heard: item.heard,
                     outlier: item.ms != null && item.ms > AutomathCore.OUTLIER_MS
                 })),
                 appVersion: APP_VERSION

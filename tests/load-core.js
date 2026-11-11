@@ -25,7 +25,7 @@ function loadAll(file = 'index.html') {
 // The spoken-answer reader (<script id="automath-speech">), on its own.
 function loadSpeech(file = 'index.html') {
     const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
-    const context = { Number, String, Object };
+    const context = { Number, String, Object, Array, JSON, URLSearchParams };
     vm.createContext(context);
     vm.runInContext(`${block(html, 'automath-speech', file)}\nthis.AutomathSpeech = AutomathSpeech;`, context);
     return context.AutomathSpeech;
