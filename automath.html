@@ -467,6 +467,10 @@
             text-align: center;
         }
 
+        #voiceBtn.hidden {
+            display: none;
+        }
+
         .voice.hidden {
             display: none;
         }
@@ -560,7 +564,73 @@
             color: #16a34a;
             border-color: #86efac;
             background: #f0fdf4;
-            animation: voice-pulse 1.2s ease-in-out infinite;
+        }
+
+        /* Listening (Decision 25): while the learner answers out loud, a live
+           waveform of their voice takes the number pad's place. It is the only
+           sign that the microphone is on. */
+        .listen {
+            width: 320px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .listen.hidden {
+            display: none;
+        }
+
+        #wave {
+            display: block;
+            width: 320px;
+            height: 120px;
+            margin: 0 auto;
+        }
+
+        .listen-caption {
+            font-size: 16px;
+            color: #737373;
+            min-height: 22px;
+            margin: 4px 0 6px 0;
+        }
+
+        #heldEnter {
+            display: block;
+            width: 100%;
+            height: 64px;
+            margin: 6px 0 10px 0;
+            padding: 0;
+            background: #2563eb;
+            border: 1px solid #2563eb;
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 600;
+            touch-action: manipulation;
+        }
+
+        #heldEnter.hidden, #typeBtn.hidden {
+            display: none;
+        }
+
+        #typeBtn {
+            background: transparent;
+            color: #737373;
+            border: 1px solid #dddddd;
+            border-radius: 999px;
+            font-size: 16px;
+            font-weight: 500;
+            padding: 8px 18px;
+            margin: 6px 0 0 0;
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            touch-action: manipulation;
+        }
+
+        #typeBtn svg {
+            width: 18px;
+            height: 18px;
         }
 
         @keyframes voice-pulse {
@@ -569,7 +639,7 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-            #voiceBtn.on .voice-dot, .mic-btn.on { animation: none; }
+            #voiceBtn.on .voice-dot { animation: none; }
         }
 
         /* Fireworks over a score above 85% (Decision 17). Clicks pass through. */
@@ -623,6 +693,13 @@
             <div class="voice hidden" id="voice">
                 <button type="button" id="voiceBtn" aria-pressed="false"></button>
                 <div class="voice-note hidden" id="voiceNote" role="status"></div>
+            </div>
+
+            <div class="listen hidden" id="listen">
+                <canvas id="wave" role="img" aria-label="Listening"></canvas>
+                <div class="listen-caption" id="listenCaption" aria-live="polite"></div>
+                <button type="button" id="heldEnter" class="hidden">Enter</button>
+                <button type="button" id="typeBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Type instead</button>
             </div>
 
             <div class="keypad hidden" id="keypad">
@@ -1462,7 +1539,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.9.0';
+        const APP_VERSION = '1.10.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
@@ -1681,17 +1758,11 @@
         }
 
         function renderVoice() {
-            if (voice.on) {
-                const preparing = voice.state === 'preparing';
-                voiceBtn.className = preparing ? 'on preparing' : 'on';
-                voiceBtn.innerHTML = '<span class="voice-dot" aria-hidden="true"></span>'
-                    + (preparing ? 'Getting ready to listen' : 'I’m listening');
-                voiceBtn.setAttribute('aria-pressed', 'true');
-            } else {
-                voiceBtn.className = '';
-                voiceBtn.innerHTML = MIC_ICON + (voice.blocked || voice.unavailable ? 'Microphone is off' : 'Answer out loud');
-                voiceBtn.setAttribute('aria-pressed', 'false');
-            }
+            // While listening the waveform below is the sign that voice is on,
+            // so the switch shows only while it is off.
+            voiceBtn.className = voice.on ? 'hidden' : '';
+            voiceBtn.innerHTML = MIC_ICON + (voice.blocked || voice.unavailable ? 'Microphone is off' : 'Answer out loud');
+            voiceBtn.setAttribute('aria-pressed', voice.on ? 'true' : 'false');
             // Tap-to-talk: kit only, while hands-free is off and the device can listen.
             const tapShown = voiceEngine === 'kit' && !voice.on && !voice.blocked && !voice.unavailable;
             micBtn.classList.toggle('hidden', !tapShown);
@@ -1699,7 +1770,206 @@
             micBtn.classList.toggle('on', tapOn);
             micBtn.classList.toggle('preparing', tapOn && voice.tapState === 'preparing');
             micBtn.setAttribute('aria-pressed', tapOn ? 'true' : 'false');
+            renderListening(tapOn);
         }
+
+        // ---- Listening: a live waveform in the number pad's place (Decision 25) ----
+        //
+        // Shown while hands-free voice is on, and while a tap-to-talk listens.
+        // The bars follow the loudness of the microphone, so a learner sees at
+        // once that they are being heard. Hands-free also offers "Type instead"
+        // (turns voice off and brings the number pad back) and, while a heard
+        // number waits in the box (rule 3), an Enter button to confirm it.
+        //
+        // The loudness comes from the listener's own `level` (0 to 1) when the
+        // kit gives one, otherwise from a meter on the microphone opened only
+        // while the recognizer is listening. Without either, the bars breathe
+        // gently so the learner still sees that the app is listening.
+        const listenEl = document.getElementById('listen');
+        const waveCanvas = document.getElementById('wave');
+        const listenCaption = document.getElementById('listenCaption');
+        const heldEnter = document.getElementById('heldEnter');
+        const typeBtn = document.getElementById('typeBtn');
+        const WAVE_BARS = 28;
+        const WAVE_STEP_MS = 60;     // a new bar this often; the bars move left
+        const WAVE_FLOOR_DB = -55;   // this quiet or quieter: a dot
+        const WAVE_RANGE_DB = 35;    // this much louder than the floor: a full bar
+        const wave = { raf: 0, levels: new Array(WAVE_BARS).fill(0), lastStep: 0, smooth: 0, color: null, colorOp: null };
+        const meter = { stream: null, ctx: null, analyser: null, buf: null, opening: false, failed: false };
+
+        function renderListening(tapOn) {
+            const listening = voice.on || (voiceEngine === 'kit' && tapOn);
+            listenEl.classList.toggle('hidden', !listening);
+            if (useKeypad) keypad.classList.toggle('hidden', listening);
+            const preparing = voice.on ? voice.state === 'preparing' : voice.tapState === 'preparing';
+            listenCaption.textContent = listening && preparing ? 'Getting ready…' : '';
+            waveCanvas.setAttribute('aria-label', preparing ? 'Getting ready to listen' : 'Listening');
+            typeBtn.classList.toggle('hidden', !voice.on);
+            heldEnter.classList.toggle('hidden', !(voice.on && voice.held && awaitingAnswer));
+            waveSync();
+        }
+
+        // The microphone is listening for an answer right now.
+        function waveLive() {
+            if (document.hidden || !practiceScreen.classList.contains('active')) return false;
+            if (voiceEngine === 'kit') {
+                return voice.on ? voice.state === 'listening' : (!!voice.tap && voice.tapState === 'listening');
+            }
+            return voice.on && voice.running;
+        }
+
+        function kitLevel() {
+            const l = voiceEngine === 'kit' ? (voice.on ? voice.ear : voice.tap) : null;
+            return l && typeof l.level === 'number' ? Math.max(0, Math.min(1, l.level)) : null;
+        }
+
+        function openMeter() {
+            if (meter.stream || meter.opening || meter.failed) return;
+            const md = navigator.mediaDevices;
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!md || !md.getUserMedia || !Ctx) { meter.failed = true; return; }
+            meter.opening = true;
+            // The kit's own settings, so both share one microphone set up one way.
+            const audio = voiceEngine === 'kit'
+                ? { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false }
+                : true;
+            md.getUserMedia({ audio, video: false }).then(stream => {
+                meter.opening = false;
+                if (!waveLive() || listenEl.classList.contains('hidden') || kitLevel() !== null) {
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                }
+                try {
+                    const ctx = new Ctx();
+                    const analyser = ctx.createAnalyser();
+                    analyser.fftSize = 1024;
+                    ctx.createMediaStreamSource(stream).connect(analyser);
+                    if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => { /* stays still */ });
+                    meter.stream = stream;
+                    meter.ctx = ctx;
+                    meter.analyser = analyser;
+                    meter.buf = new Float32Array(analyser.fftSize);
+                } catch (e) {
+                    stream.getTracks().forEach(t => t.stop());
+                    meter.failed = true;
+                }
+            }).catch(() => {
+                meter.opening = false;
+                meter.failed = true;
+            });
+        }
+
+        function closeMeter() {
+            if (meter.stream) meter.stream.getTracks().forEach(t => t.stop());
+            if (meter.ctx) { try { meter.ctx.close(); } catch (e) { /* closed */ } }
+            meter.stream = null;
+            meter.ctx = null;
+            meter.analyser = null;
+            meter.buf = null;
+        }
+
+        // Loudness now, 0 to 1, or null without a meter.
+        function meterLevel() {
+            if (!meter.analyser) return null;
+            let sum = 0;
+            if (meter.analyser.getFloatTimeDomainData) {
+                meter.analyser.getFloatTimeDomainData(meter.buf);
+                for (let i = 0; i < meter.buf.length; i++) sum += meter.buf[i] * meter.buf[i];
+            } else {
+                const bytes = new Uint8Array(meter.analyser.fftSize);
+                meter.analyser.getByteTimeDomainData(bytes);
+                for (let i = 0; i < bytes.length; i++) { const v = (bytes[i] - 128) / 128; sum += v * v; }
+            }
+            const rms = Math.sqrt(sum / meter.buf.length);
+            const db = 20 * Math.log10(Math.max(rms, 1e-6));
+            return Math.max(0, Math.min(1, (db - WAVE_FLOOR_DB) / WAVE_RANGE_DB));
+        }
+
+        function waveColor() {
+            const op = problemContainerEl.dataset.op || '';
+            if (wave.colorOp !== op || !wave.color) {
+                wave.colorOp = op;
+                wave.color = getComputedStyle(problemContainerEl).getPropertyValue('--op-color').trim() || '#16a34a';
+            }
+            return wave.color;
+        }
+
+        function waveSync() {
+            if (!listenEl.classList.contains('hidden') && !wave.raf && !document.hidden) {
+                wave.raf = requestAnimationFrame(waveFrame);
+            }
+        }
+
+        function waveFrame(now) {
+            wave.raf = 0;
+            if (listenEl.classList.contains('hidden') || !practiceScreen.classList.contains('active') || document.hidden) {
+                closeMeter();
+                wave.levels.fill(0);
+                wave.smooth = 0;
+                return;
+            }
+            const live = waveLive();
+            let level = 0;
+            if (live) {
+                const k = kitLevel();
+                if (k !== null) {
+                    closeMeter();
+                    level = k;
+                } else {
+                    openMeter();
+                    const m = meterLevel();
+                    // No way to hear loudness here: breathe, so listening still shows.
+                    level = m !== null ? m : (meter.failed ? 0.1 + 0.08 * Math.sin(now / 260) : 0);
+                }
+            } else {
+                closeMeter();
+            }
+            // Rise at once, fall gently, like a voice meter.
+            wave.smooth = level > wave.smooth ? level : wave.smooth * 0.8 + level * 0.2;
+            if (now - wave.lastStep >= WAVE_STEP_MS) {
+                wave.lastStep = now;
+                wave.levels.shift();
+                wave.levels.push(live ? wave.smooth : 0);
+            }
+            drawWave(live);
+            wave.raf = requestAnimationFrame(waveFrame);
+        }
+
+        function drawWave(live) {
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = waveCanvas.clientWidth || 320;
+            const cssH = waveCanvas.clientHeight || 120;
+            if (waveCanvas.width !== Math.round(cssW * dpr) || waveCanvas.height !== Math.round(cssH * dpr)) {
+                waveCanvas.width = Math.round(cssW * dpr);
+                waveCanvas.height = Math.round(cssH * dpr);
+            }
+            const g = waveCanvas.getContext('2d');
+            if (!g) return;
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, cssW, cssH);
+            g.fillStyle = waveColor();
+            const gap = 5;
+            const barW = (cssW - gap * (WAVE_BARS - 1)) / WAVE_BARS;
+            const minH = barW;
+            const maxH = cssH - 4;
+            for (let i = 0; i < WAVE_BARS; i++) {
+                const h = minH + wave.levels[i] * (maxH - minH);
+                const x = i * (barW + gap);
+                const y = (cssH - h) / 2;
+                // Older bars (to the left) fade a little; all dim while getting ready.
+                g.globalAlpha = (live ? 1 : 0.35) * (0.4 + 0.6 * (i / (WAVE_BARS - 1)));
+                const r = barW / 2;
+                g.beginPath();
+                if (g.roundRect) g.roundRect(x, y, barW, h, r); else g.rect(x, y, barW, h);
+                g.fill();
+            }
+            g.globalAlpha = 1;
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            // The microphone is never left on behind a hidden page.
+            if (document.hidden) closeMeter(); else waveSync();
+        });
 
         function showVoiceNote(text) {
             voiceNote.textContent = text || '';
@@ -1727,12 +1997,15 @@
             } else {
                 voice.held = null;
             }
+            renderVoice();
         }
 
         // The learner typed or tapped over a held number: it is theirs now.
         function voiceTyped() {
+            const wasHeld = !!voice.held;
             voice.held = null;
             voice.heard = null;
+            if (wasHeld && voiceEngine) renderVoice();
         }
 
         // ---- The Compass voice kit ----
@@ -1920,6 +2193,13 @@
 
         function onVoiceError(error) {
             if (error === 'no-speech' || error === 'aborted') return;
+            // The waveform's meter may be what holds the microphone: let the
+            // recognizer have it, and the bars breathe instead.
+            if (error === 'audio-capture' && (meter.stream || meter.opening)) {
+                closeMeter();
+                meter.failed = true;
+                return;
+            }
             voice.failures++;
             if (error === 'language-not-supported' && voice.local) {
                 voice.local = false;  // the on-device model went away: use the browser's usual recognizer
@@ -2009,6 +2289,7 @@
                 }
             } else {
                 voice.ignoreBelow = voice.seen;
+                if (voiceEngine) renderVoice();
             }
             voiceSync();
         }
@@ -2020,6 +2301,7 @@
             clearTimeout(voice.settle);
             voice.heard = null;
             voice.held = null;
+            if (voiceEngine) renderVoice();
             if (voiceEngine === 'kit') {
                 if (voice.tap) { stopTap(); renderVoice(); }
                 return;
@@ -2065,6 +2347,12 @@
                 if (!useKeypad) answerInput.focus();
             });
             answerInput.addEventListener('input', voiceTyped);
+            // Enter for a heard number waiting in the box (hands-free, no number pad needed).
+            heldEnter.addEventListener('click', () => checkAnswer());
+            typeBtn.addEventListener('click', () => {
+                setVoice(false);
+                if (!useKeypad) answerInput.focus();
+            });
             if (voiceEngine === 'browser') document.addEventListener('visibilitychange', voiceSync);
         }
 
