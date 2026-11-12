@@ -718,6 +718,21 @@ App version 1.11.0.
 
 **Tests**: `tests/speech.test.js` checks `AutomathSpeech.decide` (a final wrong number is `miss`, a partial one `wait`). Checked in Chromium with a stand-in kit: a right answer shows the green number and tick; a wrong number said and finished shows the right answer with the cross and moves on; the set scores 9/10 with one wrong answer, and the report item has `correct: false, voice: true`.
 
+### Decision 27: Hosted on Vercel, Compass Only (12 November 2026)
+
+**Decision**: Automath is a Compass app, not a public page. Four changes:
+
+- **Hosting moves to Vercel**, beside Sigma's other Compass apps: project `automath` in the Sigma School team, linked to this repository, `main` deploying to https://sigma-automath.vercel.app/ in about a minute. Every pull request gets a preview deployment (Vercel sign-in needed). GitHub Pages' up-to-10-minute cache goes with it.
+- **The old address redirects.** `https://sigmaschools.github.io/automath/` sends visitors to the new address with the query and hash kept. A Compass launch (`compass_parts` in the query) is left on the old address for now, because a Compass shell only loads an app from the hosts its registry entry lists; once every registry points at Vercel, the exception and GitHub Pages can go.
+- **No standalone mode.** The operation picker, the "Practice Again" button and the browser's own speech recognizer (Decision 23's public-page voice) are removed, with the number parser that served it. Opened without `compass_parts` (a preview, or the file from disk), the page runs all four operations as Compass would on a first day, with a fresh fact record; voice needs the Compass voice kit, so it is off there.
+- **Compass's registry entry moves** to the new address: `launchUrl` `https://sigma-automath.vercel.app/`, `allowedHosts` `sigma-automath.vercel.app`. The staging change is Compass's to make (the operator key may not move where an app runs).
+
+App version 1.14.0 (numbered before Decision 28, which merged first as 1.13.0).
+
+**Why**: the owner, 12 Nov 2026: "This app doesn't really work outside of Compass anymore" and "There's no need for us to maintain a standalone mode." Since Decision 19 the per-fact record, spaced review and graduation only work with Compass, and since Decision 24 so does voice on the Mac.
+
+**Tests**: `node --test` (the speech parser's tests went with it), both simulators. Checked in Chromium: opened bare, the page starts Addition at once and reaches the part screen after 10 answers with `part` and `state` reports; a Compass launch with a stand-in kit marks a wrong spoken answer; on the old address (served from a stand-in) a plain visit is sent to the Vercel address with its query, and a Compass launch stays.
+
 ### Decision 28: A Miss Shows the Learner's Answer, Then the Right One (12 November 2026)
 
 **Decision**: After a wrong answer, typed or spoken, the box first shows the learner's own answer in red with the red cross beside it (0.9 s), then the right answer in green on a green box with no mark beside it (1.5 s), then the next problem. A right answer is unchanged: its number in green with a green tick (0.4 s). Keys pressed during the feedback change nothing.

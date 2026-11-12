@@ -2,7 +2,7 @@
 
 A minimal, research-backed math practice app for K-5 students to develop automaticity in basic arithmetic through adaptive, low-pressure daily warmups.
 
-**[Try it now →](https://sigmaschools.github.io/automath/)**
+Automath runs inside Compass, Sigma's school shell, as the daily math warm-up. It is hosted on Vercel at https://sigma-automath.vercel.app/ (Decision 27); there is no standalone mode.
 
 ![Automath Screenshot](https://img.shields.io/badge/Grade-K--5-blue) ![No Dependencies](https://img.shields.io/badge/dependencies-none-green) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
@@ -36,7 +36,7 @@ Automath helps elementary students build **automaticity** with basic math facts�
 
 ### Running inside Compass
 
-Compass, the school shell that runs a learner's apps in order, opens Automath as a daily warm-up. With `?compass_parts=addition,subtraction,…` the picker is skipped and the listed operations run in one visit: grouped one after another on odd local days, one mixed set on even days (`mode=mixed|grouped` forces one for testing). Each finished operation leaves a `kind: "part"` report in the page, and a `kind: "state"` report carries the learner's per-fact record, which Compass hands back next time as `compass_state`. With that record each day's problems aim at weak and due facts, reviews are spaced out, and an operation whose facts are mastered graduates out of the daily warm-up to short check-ins. Automath itself still stores nothing. The contract is `compass/APP-CONTRACT.md` in the Compass repository; the decisions are 12 to 22 in [DESIGN_RATIONALE.md](./DESIGN_RATIONALE.md).
+Compass, the school shell that runs a learner's apps in order, opens Automath as a daily warm-up. With `?compass_parts=addition,subtraction,…` the listed operations run in one visit: grouped one after another on odd local days, one mixed set on even days (`mode=mixed|grouped` forces one for testing). Each finished operation leaves a `kind: "part"` report in the page, and a `kind: "state"` report carries the learner's per-fact record, which Compass hands back next time as `compass_state`. With that record each day's problems aim at weak and due facts, reviews are spaced out, and an operation whose facts are mastered graduates out of the daily warm-up to short check-ins. Automath itself still stores nothing. The contract is `compass/APP-CONTRACT.md` in the Compass repository; the decisions are 12 to 22 in [DESIGN_RATIONALE.md](./DESIGN_RATIONALE.md).
 
 ## Educational Principles
 
@@ -97,15 +97,9 @@ Automaticity is the foundation of mathematical fluency.
 
 ## Getting Started
 
-### Use Online
+### In Compass
 
-Visit **[https://sigmaschools.github.io/automath/](https://sigmaschools.github.io/automath/)** in any modern browser.
-
-### Use Offline
-
-1. Download `automath.html` from this repository
-2. Open it in your browser (Chrome, Firefox, Safari, Edge)
-3. Works without internet connection
+Compass opens https://sigma-automath.vercel.app/ with `compass_parts`, `compass_state` and the learner's profile note. Opened without them (a Vercel preview, or `automath.html` from disk) the page runs all four operations as a test learner with a fresh record, and voice is off. The old address, https://sigmaschools.github.io/automath/, sends visitors to the new one, except Compass launches until every Compass registry points at Vercel.
 
 ### For Developers
 
@@ -136,10 +130,9 @@ python3 -m http.server 8000
 
 Future enhancements under consideration:
 
-- [x] Progress across days: a per-fact record, spaced review and graduation in Compass runs (Decision 19); the stand-alone page still starts fresh each time
-- [x] Mixed practice mode (Compass runs, alternate days); still to do on the stand-alone picker
+- [x] Progress across days: a per-fact record, spaced review and graduation (Decision 19)
+- [x] Mixed practice mode (alternate days)
 - [ ] Visual progress indicator
-- [ ] Keyboard shortcuts for operation selection
 - [ ] Accessibility improvements (ARIA labels, screen reader support)
 - [ ] Optional sound feedback
 

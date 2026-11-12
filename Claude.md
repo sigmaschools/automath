@@ -37,7 +37,7 @@ open automath.html
 
 # 3. Make changes to automath.html
 
-# 4. Copy to index.html for GitHub Pages
+# 4. Copy to index.html (the page Vercel serves)
 cp automath.html index.html
 
 # 5. Run the tests
@@ -49,7 +49,7 @@ git commit -m "Description of changes"
 git push -u origin <branch>
 ```
 
-GitHub Pages serves `main`, so a merged pull request is live in 1-2 minutes, including inside Compass (no Compass rebuild needed). Record each design change as a numbered Decision in DESIGN_RATIONALE.md in the same pull request.
+Vercel (project `automath`, Sigma School team) deploys `main` to https://sigma-automath.vercel.app/ in about a minute, including inside Compass (no Compass rebuild needed), and each pull request gets a preview link (Vercel sign-in needed). GitHub Pages is retired: its old address only redirects (Decision 27). Record each design change as a numbered Decision in DESIGN_RATIONALE.md in the same pull request.
 
 ## Design Principles Checklist
 
@@ -85,7 +85,7 @@ Before implementing any change, ask:
 ```
 /home/user/automath/
 ├── automath.html              # Main application (edit this)
-├── index.html                 # GitHub Pages entry (copy of automath.html)
+├── index.html                 # The page Vercel serves (copy of automath.html)
 ├── Claude.md                  # This file - start here every session
 ├── README.md                  # GitHub repository readme
 ├── PROJECT_CONTEXT.md         # Technical documentation - READ THIS
@@ -102,12 +102,12 @@ Before implementing any change, ask:
 open automath.html
 ```
 
-### Deploying to GitHub Pages
+### Deploying (Vercel)
 ```bash
 # Copy, test, commit on a branch, open a PR; merging to main publishes
 cp automath.html index.html
 node --test
-# After the merge, wait 1-2 minutes, then check: https://sigmaschools.github.io/automath/
+# After the merge, about a minute later, check: https://sigma-automath.vercel.app/
 ```
 
 ### Modifying Difficulty Levels
@@ -141,10 +141,9 @@ No password, API key, token, private key or database URL with a password goes in
 - Level 4: Addition/subtraction facts crossing ten (8 + 7, 13 − 6), 0-12× tables
 
 **UX Flow:**
-1. Click operation → immediate practice start
-2. 10 problems with adaptive difficulty (vertical layout, on a card colored by operation)
-3. View results: summary stats + review table with all problems/answers
-4. "Practice Again" returns to operation selection
+1. Compass opens the page with the operations for today; the first starts at once
+2. 10 problems per operation with adaptive difficulty (vertical layout, on a card colored by operation)
+3. View results: summary stats + review table with all problems/answers; Compass moves on
 
 **Problem Format:**
 ```
@@ -169,14 +168,11 @@ Based on **The Math Academy Way** principles:
 ## Future Enhancements (Not Yet Implemented)
 
 **High Priority:**
-1. Progress across days on the stand-alone page (Compass runs already keep a per-fact record, Decision 19)
-2. Mixed practice on the stand-alone picker (Compass runs already alternate mixed and grouped days, Decision 16)
-3. Visual progress indicator (subtle dots showing 10 problems)
+1. Visual progress indicator (subtle dots showing 10 problems)
 
 **Medium Priority:**
-4. Keyboard shortcuts (1/2/3/4 for operation selection)
-5. Accessibility (ARIA labels, screen reader support)
-6. Optional sound feedback (off by default)
+2. Accessibility (ARIA labels, screen reader support)
+3. Optional sound feedback (off by default)
 
 **See DESIGN_RATIONALE.md for full list and open questions**
 
