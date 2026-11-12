@@ -169,7 +169,7 @@
             position: relative;
         }
 
-        /* The red cross beside the right answer after a miss (Decision 18) */
+        /* The red cross beside a wrong answer (Decision 28) */
         .answer-mark {
             position: absolute;
             left: 20px;
@@ -229,15 +229,13 @@
             caret-color: transparent;
         }
 
-        /* After a miss: the right answer, in dark text on the red box */
+        /* After a miss, once the wrong answer has shown: the right answer,
+           in green on a green box, with no mark beside it (Decision 28) */
         input[type="number"].corrected {
-            background-color: #ffebee;
-            border-top-color: #ef4444;
+            background-color: #e8f5e9;
+            border-top-color: #22c55e;
+            color: #15803d;
             caret-color: transparent;
-        }
-
-        input[type="number"].corrected::placeholder {
-            color: #111111;
         }
 
         input[type="number"]::placeholder {
@@ -1530,11 +1528,12 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below). Without the parameter the app works exactly as before.
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.11.0';
+        const APP_VERSION = '1.13.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
-        const FEEDBACK_MS = 400;     // a tick or a cross, then the next problem
-        const CORRECTION_MS = 1500;  // after a miss: the right answer stays this long
+        const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
+        const WRONG_MS = 900;        // a miss: the learner's answer and a cross stay this long,
+        const CORRECTION_MS = 1500;  // then the right answer stays this long (Decision 28)
         const urlParams = (() => {
             try { return new URLSearchParams(window.location.search); } catch (e) { return new URLSearchParams(); }
         })();
@@ -2449,6 +2448,7 @@
             answerInput.classList.remove('correct', 'incorrect', 'corrected');
             answerMark.textContent = '';
             answerMark.classList.remove('right');
+            answerInput.readOnly = false;
             answerInput.focus();
             problemShownAt = Date.now();
             problemHiddenMs = 0;
@@ -2460,20 +2460,31 @@
             if (e.key === 'Enter') checkAnswer();
         });
 
-        function showFeedback(isCorrect) {
-            answerInput.value = '';
+        // Right: the answer in green with a green tick. Wrong (Decision 28):
+        // the learner's own answer in red with a red cross, then the right
+        // answer in green with no mark, so the cross never sits beside it.
+        // Returns how long the feedback takes before the next problem.
+        function showFeedback(isCorrect, userAnswer) {
+            const problem = currentProblemData;
+            answerInput.readOnly = true;   // keys during the feedback change nothing
             if (isCorrect) {
-                // The answer, in green, with a green tick beside it.
-                answerInput.value = String(currentProblemData.answer);
+                answerInput.value = String(problem.answer);
                 answerInput.classList.add('correct');
                 answerMark.textContent = '✓';
                 answerMark.classList.add('right');
-            } else {
-                // The right answer, in the box, with a red cross beside it.
-                answerInput.placeholder = String(currentProblemData.answer);
-                answerInput.classList.add('corrected');
-                answerMark.textContent = '✗';
+                return FEEDBACK_MS;
             }
+            answerInput.value = String(userAnswer);
+            answerInput.classList.add('incorrect');
+            answerMark.textContent = '✗';
+            setTimeout(() => {
+                if (currentProblemData !== problem || awaitingAnswer) return;
+                answerInput.classList.remove('incorrect');
+                answerInput.classList.add('corrected');
+                answerInput.value = String(problem.answer);
+                answerMark.textContent = '';
+            }, WRONG_MS);
+            return WRONG_MS + CORRECTION_MS;
         }
 
         // `spoken` is set for an answer said out loud: { ms, heard } with the
@@ -2493,8 +2504,7 @@
 
             const ms = spoken ? spoken.ms : responseMs();
             const isCorrect = userAnswer === currentProblemData.answer;
-            showFeedback(isCorrect);
-            const wait = isCorrect ? FEEDBACK_MS : CORRECTION_MS;
+            const wait = showFeedback(isCorrect, userAnswer);
 
             if (currentIsRetry) {
                 setTimeout(advance, wait);
