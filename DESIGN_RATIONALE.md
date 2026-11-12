@@ -753,14 +753,14 @@ App version 1.15.0.
 
 **Tests**: `node --test` passes. Checked in Chromium with a stand-in Compass voice kit: in typing mode the answer box has no microphone and "Answer out loud" shows below it; tapping it starts the listener and the waveform with "Type instead"; "Type instead" stops the listener and brings typing back. No page errors.
 
-### Decision 30: A Heard Number Waits for Enter; Teen/Ty Mix-Ups Read as the Answer (12 November 2026)
+### Decision 31: A Heard Number Waits for Enter; Teen/Ty Mix-Ups Read as the Answer (12 November 2026)
 
 **Decision**: Two changes from a morning of voice testing with a child who mumbled and sang between answers and got angry when Automath took the mumbling as answers, and who was heard saying 13 as 30:
 
 - **Enter sends a spoken answer.** While "Answer out loud" is on, a heard number goes in the answer box and waits there, right or wrong, until the learner presses Enter: a large Enter button under the waveform (dimmed until a number is heard), or the Enter key on a keyboard. Saying another number replaces it, so mumbling and singing only change what the box shows. If more than one number is heard at once ("seven… eight"), the box shows the last. Once sent, the answer is marked like a typed one (Decisions 26 and 28: a wrong one shows red with a cross, then the right answer in green). This was the child's own idea: he wanted to check that the box showed the number he meant before it counted.
 - **Teen/ty mix-ups.** When the answer is 13 to 19 and its "-ty" partner is heard (30 to 90), or the other way round, the box shows the answer. Recognizers often confuse the two endings, and a child who knows 6 + 7 rarely answers "thirty". Only the answer's own partner is changed: 40 heard for 13, or 30 heard for 12, shows as heard. For addition and subtraction the kit already listens only up to the largest answer (18), so this matters mostly for multiplication and division.
 
-App version 1.16.0.
+App version 1.17.0 (numbered after Decision 30, grouped days as one sequence, open as #27 when this was written).
 
 **What this changes**: Decision 26 marked a wrong spoken number as soon as the learner stopped talking, and a right one at once. Now neither is marked until Enter, which brings back a form of Compass app contract 1.5, section 15, rule 3 (hold a heard number for the learner to confirm), now for every number rather than only wrong ones. Decision 26's problem (a wrong number held, then the right one said, ending a set at 100%) is answered differently: the learner sees exactly what will be sent and sends it themselves, as when typing and correcting before Enter. Decision 25's Enter button comes back, always shown while voice is on. Voice is still only on or off (Decision 29).
 

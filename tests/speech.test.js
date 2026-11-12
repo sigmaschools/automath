@@ -7,7 +7,7 @@ const speech = loadSpeech();
 
 // Compass voice kit (Decision 24, app contract 1.5 section 15).
 
-test('the box shows the last number said, for the learner to confirm (Decision 30)', () => {
+test('the box shows the last number said, for the learner to confirm (Decision 31)', () => {
     assert.equal(speech.pick([12], 12), 12);
     assert.equal(speech.pick([7], 12), 7);
     assert.equal(speech.pick([7, 8], 8), 8);
@@ -15,7 +15,7 @@ test('the box shows the last number said, for the learner to confirm (Decision 3
     assert.equal(speech.pick(undefined, 12), null);
 });
 
-test('a teen/ty mix-up of the answer shows the answer (Decision 30)', () => {
+test('a teen/ty mix-up of the answer shows the answer (Decision 31)', () => {
     assert.equal(speech.pick([30], 13), 13);
     assert.equal(speech.pick([13], 30), 30);
     assert.equal(speech.pick([90], 19), 19);

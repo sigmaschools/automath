@@ -516,7 +516,7 @@
             margin: 4px 0 6px 0;
         }
 
-        /* Enter for a heard number (Decision 30): the learner checks the box
+        /* Enter for a heard number (Decision 31): the learner checks the box
            shows what they meant, then sends it. Dimmed until a number is heard. */
         #voiceEnter {
             display: block;
@@ -1321,10 +1321,10 @@
         })();
     </script>
     <script id="automath-speech">
-        // Spoken answers (Decisions 23, 24, 26, 30): what to do with a number the
+        // Spoken answers (Decisions 23, 24, 26, 31): what to do with a number the
         // Compass voice kit heard. Kept free of the DOM so tests/ can load it.
         const AutomathSpeech = (() => {
-            // The number to show in the box for what was heard (Decision 30).
+            // The number to show in the box for what was heard (Decision 31).
             // The learner confirms it with Enter, so this only chooses what
             // they see: the last number said (they may correct themselves:
             // "seven… eight"), with a teen/ty mix-up of the answer read as
@@ -1338,7 +1338,7 @@
             // ending syllable, which recognizers often get wrong, while a child
             // who knows 6 + 7 rarely answers "thirty". So when the answer is
             // one of such a pair and the other one is heard, the learner most
-            // likely said the answer (Decision 30). The report keeps the
+            // likely said the answer (Decision 31). The report keeps the
             // heard words, so the data can show how often this happens.
             function teenTy(heard, answer) {
                 if (heard === answer) return heard;
@@ -1387,7 +1387,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.16.0';
+        const APP_VERSION = '1.17.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1524,7 +1524,7 @@
             });
         }
 
-        // Answer out loud (Decisions 23, 24, 26, 30). A number heard goes in
+        // Answer out loud (Decisions 23, 24, 26, 31). A number heard goes in
         // the answer box and waits there: the learner checks it and presses
         // Enter (the button under the waveform, or the keyboard) to send it,
         // and it is marked like a typed answer. Saying another number
@@ -1561,7 +1561,7 @@
             unavailable: false, // kit: this device cannot listen; typing works
             state: null,      // kit: the hands-free listener's state
             ear: null,        // kit: the hands-free listener
-            held: null,       // { n, heard, ms }: a heard number in the box, waiting for Enter (Decision 30)
+            held: null,       // { n, heard, ms }: a heard number in the box, waiting for Enter (Decision 31)
             last: null        // { values, text }: what was last heard for this problem, for the report
         };
 
@@ -1594,7 +1594,7 @@
         // The bars follow the loudness of the microphone, so a learner sees at
         // once that they are being heard. Hands-free also offers "Type instead"
         // (turns voice off and brings the number pad back) and an Enter button
-        // that sends the heard number in the box (Decision 30).
+        // that sends the heard number in the box (Decision 31).
         //
         // The loudness comes from the listener's own `level` (0 to 1) when the
         // kit gives one, otherwise from a meter on the microphone opened only
@@ -1624,7 +1624,7 @@
             waveSync();
         }
 
-        // Enter under the waveform (Decision 30): shown while voice is on,
+        // Enter under the waveform (Decision 31): shown while voice is on,
         // usable once there is a number in the box to send.
         function renderEnter() {
             voiceEnter.classList.toggle('hidden', !voice.on);
@@ -1799,7 +1799,7 @@
         // A number was heard for the problem on screen. `ms` is the response
         // time to when it was said; `heard` is { values, text } for the report.
         // It goes in the box and waits there until the learner presses Enter
-        // (Decision 30); saying another number replaces it, typing over it
+        // (Decision 31); saying another number replaces it, typing over it
         // makes it typed.
         function voiceHeard(n, ms, heard) {
             if (!awaitingAnswer || n === null) return;
@@ -2119,7 +2119,7 @@
         }
 
         // A heard number in the box that the learner sends with Enter is a
-        // spoken answer (Decision 30), timed from the problem appearing to the
+        // spoken answer (Decision 31), timed from the problem appearing to the
         // number being said, so pressing Enter does not count against fluency.
         function checkAnswer() {
             if (!awaitingAnswer) return;
