@@ -69,10 +69,10 @@ test('a heard right answer counts at once, even before the learner stops talking
     assert.equal(speech.decide(12, true, 12), 'accept');
 });
 
-test('a heard wrong number is never marked: it waits for the learner (rule 3)', () => {
+test('a heard wrong number is a miss once the learner stops talking (Decision 26)', () => {
     assert.equal(speech.decide(13, false, 12), 'wait');
-    assert.equal(speech.decide(13, true, 12), 'hold');
-    assert.equal(speech.decide(0, true, 12), 'hold');
+    assert.equal(speech.decide(13, true, 12), 'miss');
+    assert.equal(speech.decide(0, true, 12), 'miss');
 });
 
 test('the report notes what was heard only when it was not simply the answer recorded', () => {
