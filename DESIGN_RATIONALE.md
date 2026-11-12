@@ -718,6 +718,16 @@ App version 1.11.0.
 
 **Tests**: `tests/speech.test.js` checks `AutomathSpeech.decide` (a final wrong number is `miss`, a partial one `wait`). Checked in Chromium with a stand-in kit: a right answer shows the green number and tick; a wrong number said and finished shows the right answer with the cross and moves on; the set scores 9/10 with one wrong answer, and the report item has `correct: false, voice: true`.
 
+### Decision 28: A Miss Shows the Learner's Answer, Then the Right One (12 November 2026)
+
+**Decision**: After a wrong answer, typed or spoken, the box first shows the learner's own answer in red with the red cross beside it (0.9 s), then the right answer in green on a green box with no mark beside it (1.5 s), then the next problem. A right answer is unchanged: its number in green with a green tick (0.4 s). Keys pressed during the feedback change nothing.
+
+App version 1.13.0. (Numbered after Decision 27, Vercel hosting, which was still open when this was written.)
+
+**Why**: testing voice in Compass, the person running the project said "300" for 7 + 1 and saw 8 with a red cross beside it, which reads as "8 is wrong". The learner should see what they said (or typed) marked wrong, then see the right answer presented as right, so the feedback is instant and unambiguous. This replaces the miss display of Decisions 18 and 26 (right answer in dark text on the red box with the cross); the scoring, fact record and retry later in the set are unchanged. Typed misses get the same display so the feedback means the same thing whichever way the learner answers.
+
+**Tests**: checked in Chromium with a stand-in Compass voice kit: hearing "300" for 3 + 2 shows 300 in red with the cross, then 5 in green with no mark, then problem 2; a typed 99 does the same, and typing during the feedback leaves the box alone. `node --test` passes.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
