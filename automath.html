@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        // Automath lives on Vercel (Decision 27). The old GitHub Pages address
+        // sends visitors there, keeping the query and the hash. A Compass launch
+        // (`compass_parts` in the query) is left alone until every Compass
+        // registry points at the new address, since a shell only lets an app
+        // load from its listed hosts.
+        (function () {
+            if (location.hostname !== 'sigmaschools.github.io') return;
+            if (/[?&]compass_parts=/.test(location.search)) return;
+            location.replace('https://sigma-automath.vercel.app/' + location.search + location.hash);
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Automath - Math Practice</title>
@@ -28,13 +40,6 @@
             text-align: center;
         }
 
-        h1 {
-            font-size: 48px;
-            font-weight: 300;
-            margin-bottom: 60px;
-            letter-spacing: -1px;
-        }
-
         h2 {
             font-size: 32px;
             font-weight: 300;
@@ -47,30 +52,6 @@
 
         .screen.active {
             display: block;
-        }
-
-        .options {
-            margin-bottom: 50px;
-        }
-
-        .option-group {
-            margin-bottom: 40px;
-        }
-
-        .option-group label {
-            display: block;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 15px;
-            color: #666;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
         }
 
         button {
@@ -87,26 +68,6 @@
 
         button:hover {
             opacity: 0.8;
-        }
-
-        button.secondary {
-            background: #ffffff;
-            color: #000000;
-            border: 1px solid #000000;
-        }
-
-        button.selected {
-            background: #000000;
-            color: #ffffff;
-        }
-
-        #restartBtn {
-            background: #2563eb;
-        }
-
-        #restartBtn:hover {
-            background: #1d4ed8;
-            opacity: 1;
         }
 
         .problem-container {
@@ -643,24 +604,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Start Screen -->
-        <div id="startScreen" class="screen active">
-            <h1>Automath</h1>
-
-            <div class="options">
-                <div class="option-group">
-                    <label>Operation</label>
-                    <div class="button-group">
-                        <button class="secondary operation-btn" data-operation="addition">Addition</button>
-                        <button class="secondary operation-btn" data-operation="subtraction">Subtraction</button>
-                        <button class="secondary operation-btn" data-operation="multiplication">Multiplication</button>
-                        <button class="secondary operation-btn" data-operation="division">Division</button>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
         <!-- Practice Screen -->
         <div id="practiceScreen" class="screen">
             <div class="problem-container">
@@ -765,8 +708,6 @@
                 </thead>
                 <tbody id="summaryTableBody"></tbody>
             </table>
-
-            <button id="restartBtn" style="margin-top: 40px; margin-bottom: 0;">Practice Again</button>
 
             <div class="review-section">
                 <div class="review-title">Review Your Work</div>
@@ -1400,86 +1341,9 @@
         })();
     </script>
     <script id="automath-speech">
-        // Spoken answers (Decision 23): what number a learner said. The browser's
-        // speech recognizer gives text ("919", "1,121", "nine hundred nineteen",
-        // "for", "it's 12"); this turns it into the last whole number in it, or
-        // null when there is none. Kept free of the DOM so tests/ can load it.
+        // Spoken answers (Decisions 23, 24, 26): what to do with a number the
+        // Compass voice kit heard. Kept free of the DOM so tests/ can load it.
         const AutomathSpeech = (() => {
-            const UNITS = { zero: 0, one: 1, won: 1, two: 2, to: 2, too: 2, three: 3, four: 4, for: 4, fore: 4,
-                five: 5, six: 6, seven: 7, eight: 8, ate: 8, nine: 9 };
-            const TEENS = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
-                seventeen: 17, eighteen: 18, nineteen: 19 };
-            const TENS = { twenty: 20, thirty: 30, forty: 40, fourty: 40, fifty: 50, sixty: 60, seventy: 70,
-                eighty: 80, ninety: 90 };
-
-            function classify(token, next) {
-                if (/^\d+$/.test(token)) {
-                    const v = parseInt(token, 10);
-                    if (token.length === 1) return { v, c: 'unit' };
-                    if (v >= 10 && v <= 19 && token.length === 2) return { v, c: 'teen' };
-                    if (v % 10 === 0 && v >= 20 && v <= 90) return { v, c: 'tens' };
-                    return { v, c: 'whole' };
-                }
-                if (token in UNITS) return { v: UNITS[token], c: 'unit' };
-                if (token in TEENS) return { v: TEENS[token], c: 'teen' };
-                if (token in TENS) return { v: TENS[token], c: 'tens' };
-                if (token === 'a' && (next === 'hundred' || next === 'thousand')) return { v: 1, c: 'unit' };
-                if (token === 'hundred' || token === 'thousand' || token === 'and') return { c: token };
-                return null;
-            }
-
-            function parseNumber(text) {
-                if (typeof text !== 'string') return null;
-                const clean = text.toLowerCase()
-                    .replace(/(\d),(?=\d{3})/g, '$1')     // 1,121
-                    .replace(/(\d):(\d\d)/g, '$1$2')       // "1:44" for one forty-four
-                    .replace(/-/g, ' ')
-                    .replace(/[^a-z0-9 ]+/g, ' ');
-                const tokens = clean.split(/\s+/).filter(Boolean);
-                const found = [];
-                let cur = null;  // { total, chunk, last }
-                const flush = () => {
-                    if (cur) found.push(cur.total + cur.chunk);
-                    cur = null;
-                };
-                for (let i = 0; i < tokens.length; i++) {
-                    const t = classify(tokens[i], tokens[i + 1]);
-                    if (!t) { flush(); continue; }
-                    if (t.c === 'and') {
-                        if (!(cur && (cur.last === 'hundred' || cur.last === 'thousand'))) flush();
-                        continue;
-                    }
-                    if (t.c === 'hundred') {
-                        if (cur && cur.chunk > 0 && cur.chunk < 100 && cur.last !== 'hundred') {
-                            cur.chunk *= 100;
-                            cur.last = 'hundred';
-                        } else flush();
-                        continue;
-                    }
-                    if (t.c === 'thousand') {
-                        if (cur && cur.total + cur.chunk > 0 && cur.last !== 'thousand' && cur.total === 0) {
-                            cur.total = (cur.total + cur.chunk) * 1000;
-                            cur.chunk = 0;
-                            cur.last = 'thousand';
-                        } else flush();
-                        continue;
-                    }
-                    if (cur && t.c === 'unit' && cur.last === 'tens') {
-                        cur.chunk += t.v;
-                        cur.last = 'unit';
-                    } else if (cur && t.c !== 'whole' && (cur.last === 'hundred' || cur.last === 'thousand')
-                        && cur.chunk % 100 === 0) {
-                        cur.chunk += t.v;
-                        cur.last = t.c;
-                    } else {
-                        flush();
-                        cur = { total: 0, chunk: t.v, last: t.c };
-                    }
-                }
-                flush();
-                return found.length > 0 ? found[found.length - 1] : null;
-            }
-
             // What to do with a number heard for the problem on screen
             // (Decision 26): the right answer counts at once; any other number
             // counts as a miss once the learner has stopped talking (`final`),
@@ -1518,17 +1382,19 @@
                 }
             }
 
-            return { parseNumber, decide, heardNote, profileIssuer };
+            return { decide, heardNote, profileIssuer };
         })();
     </script>
     <script>
-        // Compass support (app contract 0.1): `compass_parts` in the URL lists the
-        // operations to run, with no picker; each finished operation is reported
-        // in a data-compass-report block; the results screen comes after the last
+        // Compass runs Automath (app contract 0.1; Decision 27: there is no
+        // standalone mode). `compass_parts` in the URL lists the operations to
+        // run; without it, all four run, so the page can be opened on its own
+        // for testing. Each finished operation is reported in a
+        // data-compass-report block; the results screen comes after the last
         // one. On alternate days the operations are interleaved in one set
-        // (`runMode` below). Without the parameter the app works exactly as before.
+        // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.13.0';
+        const APP_VERSION = '1.14.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1538,29 +1404,28 @@
             try { return new URLSearchParams(window.location.search); } catch (e) { return new URLSearchParams(); }
         })();
         const listedParts = (() => {
-            const value = urlParams.get('compass_parts');
-            if (!value) return null;
+            const value = urlParams.get('compass_parts') || '';
             const parts = [...new Set(value.split(',').map(p => p.trim().toLowerCase()).filter(p => OPERATIONS.includes(p)))];
-            return parts.length > 0 ? parts : null;
+            return parts.length > 0 ? parts : OPERATIONS.slice();
         })();
         // The learner's fact record (Decision 19), kept by Compass and handed
         // back in `compass_state`. With a record, each operation's problems are
         // chosen fact by fact. Without one (the first day, or a Compass that
         // does not keep it yet), the level staircase chooses them as before and
-        // its answers start a new record. Outside Compass there is no record.
+        // its answers start a new record.
         const today = AutomathFacts.localDay();
-        const savedRecord = listedParts ? AutomathFacts.decode(urlParams.get('compass_state')) : null;
-        const record = listedParts ? (savedRecord || AutomathFacts.create(today)) : null;
+        const savedRecord = AutomathFacts.decode(urlParams.get('compass_state'));
+        const record = savedRecord || AutomathFacts.create(today);
         const factMode = !!savedRecord;
         // What each listed operation does today: 'practice', 'checkin' (a
         // graduated operation whose check-in is due) or 'rest' (graduated, next
         // check-in not due yet: reported done at once, nothing asked).
         const partKinds = {};
-        (listedParts || []).forEach(op => {
+        listedParts.forEach(op => {
             partKinds[op] = factMode ? AutomathFacts.todayKind(record, op, today) : 'practice';
         });
-        const restingParts = (listedParts || []).filter(op => partKinds[op] === 'rest');
-        const compassParts = listedParts ? listedParts.filter(op => partKinds[op] !== 'rest') : null;
+        const restingParts = listedParts.filter(op => partKinds[op] === 'rest');
+        const compassParts = listedParts.filter(op => partKinds[op] !== 'rest');
         // How a Compass run of two or more operations is laid out: `grouped` runs
         // them one after another (10 problems each); `mixed` interleaves them in
         // one set (10 of each, every operation once per round in a random order,
@@ -1568,7 +1433,7 @@
         // learner's local day: even days mixed, odd days grouped. `mode=mixed` or
         // `mode=grouped` in the URL forces one (for testing).
         const runMode = (() => {
-            if (!compassParts || compassParts.length < 2) return 'grouped';
+            if (compassParts.length < 2) return 'grouped';
             const forced = urlParams.get('mode');
             if (forced === 'mixed' || forced === 'grouped') return forced;
             const now = new Date();
@@ -1628,10 +1493,8 @@
         }
 
         // Elements
-        const startScreen = document.getElementById('startScreen');
         const practiceScreen = document.getElementById('practiceScreen');
         const resultsScreen = document.getElementById('resultsScreen');
-        const restartBtn = document.getElementById('restartBtn');
         const problemNum1El = document.getElementById('problemNum1');
         const problemNum2El = document.getElementById('problemNum2');
         const problemOpEl = document.getElementById('problemOp');
@@ -1640,16 +1503,6 @@
         const answerMark = document.getElementById('answerMark');
         const progressEl = document.getElementById('progress');
         const keypad = document.getElementById('keypad');
-
-        // Operation buttons - start practice immediately when clicked
-        document.querySelectorAll('.operation-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                selectedOperation = btn.dataset.operation;
-                startPractice();
-            });
-        });
-
-        restartBtn.addEventListener('click', resetApp);
 
         const partScreen = document.getElementById('partScreen');
         const nextPartBtn = document.getElementById('nextPartBtn');
@@ -1685,33 +1538,28 @@
         // still work. The switch stays on between visits on this device.
         // `voice=1` or `voice=0` in the URL forces it on or off (for testing).
         //
-        // Two ways to hear:
-        // - In Compass, the Compass voice kit (app contract 1.5, section 15): a
-        //   recognizer inside the page, on the device, told only the number
-        //   words. It works in the Mac app, which has no browser recognizer.
-        //   The kit is loaded, when the learner first wants voice, from the
-        //   Compass server that launched the app, and only from a server on
-        //   KIT_SERVERS. A tap-to-talk microphone sits beside the answer box.
-        // - Elsewhere (the public page), the browser's own speech recognizer.
+        // Voice uses the Compass voice kit (app contract 1.5, section 15): a
+        // recognizer inside the page, on the device, told only the number
+        // words. The kit is loaded, when the learner first wants voice, from
+        // the Compass server that launched the app, and only from a server on
+        // KIT_SERVERS. A tap-to-talk microphone sits beside the answer box.
+        // Without the kit (no Compass profile note) there is no voice switch;
+        // the browser's own recognizer was dropped with standalone mode
+        // (Decision 27).
         const KIT_SERVERS = ['https://compass-staging-118157882285.us-east4.run.app'];
         const KIT_PATH = '/kit/voice/1/compass-voice.js';
         const kitServer = (() => {
             const iss = AutomathSpeech.profileIssuer(window.location.hash, (b) => atob(b));
             return iss && KIT_SERVERS.includes(iss) ? iss : null;
         })();
-        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
         // `kit` when Compass launched the app from a listed server (or the page
-        // already has the kit), `browser` where the browser can recognize
-        // speech, otherwise null and no switch.
-        const voiceEngine = (kitServer || window.CompassVoice) ? 'kit' : (Recognition ? 'browser' : null);
+        // already has the kit), otherwise null and no switch.
+        const voiceEngine = (kitServer || window.CompassVoice) ? 'kit' : null;
         const voiceEl = document.getElementById('voice');
         const voiceBtn = document.getElementById('voiceBtn');
         const voiceNote = document.getElementById('voiceNote');
         const micBtn = document.getElementById('micBtn');
         const VOICE_KEY = 'automath.voice';
-        const VOICE_LANG = 'en-US';      // AutomathSpeech reads English number words
-        const VOICE_SETTLE_MS = 250;     // browser: a heard right answer waits this long in case the word goes on ("four", "fourteen")
-        const VOICE_MAX_FAILURES = 5;    // browser: errors in a row before the microphone turns off for this visit
         const NOISY_OTHERS = 3;          // kit: talk without an answer in it, this many times, before suggesting tap-to-talk
         const MIC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
         const voice = {
@@ -1723,14 +1571,8 @@
             tap: null,        // kit: a tap-to-talk listener, while it listens
             tapState: null,
             othersBase: 0, noisyShown: false,
-            local: false,     // browser: it recognizes speech on the device itself
-            rec: null, running: false, gen: 0,
-            seen: 0,          // browser: results the current recognizer has given
-            ignoreBelow: 0,   // browser: results that belong to an earlier problem
-            heard: null,      // browser: { n, ms, text }: the number in the box and when it was first heard
             held: null,       // { n, heard }: a heard number in the box while the learner is still talking
-            last: null,       // { values, text }: what was last heard for this problem, for the report
-            settle: null, failures: 0
+            last: null        // { values, text }: what was last heard for this problem, for the report
         };
 
         // The largest answer of each operation's facts, so the kit can report a
@@ -1800,10 +1642,8 @@
         // The microphone is listening for an answer right now.
         function waveLive() {
             if (document.hidden || !practiceScreen.classList.contains('active')) return false;
-            if (voiceEngine === 'kit') {
-                return voice.on ? voice.state === 'listening' : (!!voice.tap && voice.tapState === 'listening');
-            }
-            return voice.on && voice.running;
+            if (voiceEngine !== 'kit') return false;
+            return voice.on ? voice.state === 'listening' : (!!voice.tap && voice.tapState === 'listening');
         }
 
         function kitLevel() {
@@ -1964,10 +1804,6 @@
             voiceNote.classList.toggle('hidden', !text);
         }
 
-        function voiceWanted() {
-            return voice.on && practiceScreen.classList.contains('active') && !document.hidden;
-        }
-
         // A number was heard for the problem on screen. `ms` is the response
         // time to when it was said; `heard` is { values, text } for the report.
         function voiceHeard(n, final, ms, heard) {
@@ -1990,7 +1826,6 @@
         function voiceTyped() {
             const wasHeld = !!voice.held;
             voice.held = null;
-            voice.heard = null;
             if (wasHeld && voiceEngine) renderVoice();
         }
 
@@ -2127,143 +1962,15 @@
             }
         }
 
-        // ---- The browser's recognizer (outside Compass) ----
-
-        function stopVoice() {
-            clearTimeout(voice.settle);
-            if (voice.rec) {
-                voice.gen++;
-                try { voice.rec.abort(); } catch (e) { /* already stopped */ }
-            }
-            voice.rec = null;
-            voice.running = false;
-        }
-
         // Start or stop the listening to match what the page needs now.
         function voiceSync() {
-            if (voiceEngine === 'kit') { kitSync(); return; }
-            if (!Recognition) return;
-            if (!voiceWanted()) {
-                if (voice.running) stopVoice();
-                return;
-            }
-            if (voice.running) return;
-            const rec = new Recognition();
-            const gen = ++voice.gen;
-            rec.lang = VOICE_LANG;
-            rec.continuous = true;
-            rec.interimResults = true;
-            rec.maxAlternatives = 1;
-            if (voice.local && 'processLocally' in rec) rec.processLocally = true;
-            rec.onresult = (e) => { if (gen === voice.gen) onVoiceResult(e); };
-            rec.onerror = (e) => { if (gen === voice.gen) onVoiceError(e.error); };
-            rec.onend = () => {
-                if (gen !== voice.gen) return;
-                voice.rec = null;
-                voice.running = false;
-                // Recognizers stop on their own after a while; listen again.
-                if (voiceWanted()) setTimeout(voiceSync, Math.min(2000, 250 * voice.failures));
-            };
-            voice.rec = rec;
-            voice.running = true;
-            voice.seen = 0;
-            voice.ignoreBelow = 0;
-            try {
-                rec.start();
-            } catch (e) {
-                voice.rec = null;
-                voice.running = false;
-                onVoiceError('start-failed');
-            }
-        }
-
-        function onVoiceError(error) {
-            if (error === 'no-speech' || error === 'aborted') return;
-            // The waveform's meter may be what holds the microphone: let the
-            // recognizer have it, and the bars breathe instead.
-            if (error === 'audio-capture' && (meter.stream || meter.opening)) {
-                closeMeter();
-                meter.failed = true;
-                return;
-            }
-            voice.failures++;
-            if (error === 'language-not-supported' && voice.local) {
-                voice.local = false;  // the on-device model went away: use the browser's usual recognizer
-                return;
-            }
-            // `network`: no speech service behind the recognizer, so retrying
-            // cannot help this visit.
-            const refused = ['not-allowed', 'service-not-allowed', 'audio-capture', 'language-not-supported', 'network'].includes(error);
-            if (refused || voice.failures >= VOICE_MAX_FAILURES) {
-                voice.on = false;
-                voice.blocked = true;
-                stopVoice();
-                renderVoice();
-            }
-        }
-
-        function onVoiceResult(e) {
-            voice.failures = 0;
-            preferOnDevice();
-            voice.seen = Math.max(voice.seen, e.results.length);
-            if (!awaitingAnswer) {
-                // Talk during the tick or the correction belongs to no problem.
-                voice.ignoreBelow = e.results.length;
-                return;
-            }
-            for (let i = e.results.length - 1; i >= voice.ignoreBelow; i--) {
-                const text = e.results[i][0].transcript;
-                const n = AutomathSpeech.parseNumber(text);
-                if (n === null) continue;
-                if (!voice.heard || voice.heard.n !== n) voice.heard = { n, ms: responseMs(), text };
-                voice.heard.text = text;
-                answerInput.value = String(n);
-                clearTimeout(voice.settle);
-                if (e.results[i].isFinal) {
-                    submitVoice();
-                } else if (n === currentProblemData.answer) {
-                    voice.settle = setTimeout(submitVoice, VOICE_SETTLE_MS);
-                }
-                return;
-            }
-        }
-
-        function submitVoice() {
-            clearTimeout(voice.settle);
-            if (!awaitingAnswer || !voice.heard) return;
-            const h = voice.heard;
-            voiceHeard(h.n, true, h.ms, { values: [h.n], text: h.text });
-        }
-
-        // Where the browser can recognize speech on the device (newer Chrome),
-        // use that from the next problem on, so the learner's voice stays on
-        // the device. Asked only after the recognizer has heard something:
-        // Chromium without a speech service (headless) crashes on the question.
-        let onDeviceAsked = false;
-        function preferOnDevice() {
-            if (onDeviceAsked || typeof Recognition.available !== 'function') return;
-            onDeviceAsked = true;
-            const options = { langs: [VOICE_LANG], processLocally: true };
-            Promise.resolve()
-                .then(() => Recognition.available(options))
-                .then(status => {
-                    if (status === 'available') {
-                        voice.local = true;
-                    } else if ((status === 'downloadable' || status === 'downloading')
-                        && typeof Recognition.install === 'function') {
-                        // Downloads in the background; until then the browser's usual recognizer listens.
-                        return Recognition.install(options).then(ok => { if (ok) voice.local = true; });
-                    }
-                })
-                .catch(() => { /* not offered */ });
+            if (voiceEngine === 'kit') kitSync();
         }
 
         // ---- Both ----
 
         // A new problem is on screen: anything heard so far was for the last one.
         function voiceProblemShown() {
-            clearTimeout(voice.settle);
-            voice.heard = null;
             voice.held = null;
             voice.last = null;
             if (voiceEngine === 'kit') {
@@ -2273,36 +1980,23 @@
                     try { voice.ear.next({ max: maxAnswer() }); } catch (e) { /* stopped */ }
                     checkNoise();
                 }
-            } else {
-                voice.ignoreBelow = voice.seen;
-                if (voiceEngine) renderVoice();
             }
             voiceSync();
         }
 
-        // An answer is in. Browser: start a fresh recognizer for the next
-        // problem, so words still being spoken do not run into its answer.
-        // (The kit forgets them itself at next().)
+        // An answer is in. (The kit forgets words still being spoken itself
+        // at next().)
         function voiceAnswered() {
-            clearTimeout(voice.settle);
-            voice.heard = null;
             voice.held = null;
-            if (voiceEngine) renderVoice();
-            if (voiceEngine === 'kit') {
-                if (voice.tap) { stopTap(); renderVoice(); }
-                return;
-            }
-            if (voice.running) {
-                stopVoice();
-                voiceSync();
-            }
+            if (!voiceEngine) return;
+            if (voice.tap) stopTap();
+            renderVoice();
         }
 
         function setVoice(on) {
             voice.on = on;
             voice.blocked = false;
             voice.unavailable = false;
-            voice.failures = 0;
             showVoiceNote('');
             try { localStorage.setItem(VOICE_KEY, on ? '1' : '0'); } catch (e) { /* storage off */ }
             if (on && voiceEngine === 'kit') {
@@ -2337,7 +2031,6 @@
                 setVoice(false);
                 if (!useKeypad) answerInput.focus();
             });
-            if (voiceEngine === 'browser') document.addEventListener('visibilitychange', voiceSync);
         }
 
         function newCounts() {
@@ -2362,7 +2055,6 @@
             pendingRetries = [];
             sessionHistory = [];
             exerciseHiddenMs = 0;
-            startScreen.classList.remove('active');
             practiceScreen.classList.add('active');
             startTime = Date.now();
             advance();
@@ -2411,7 +2103,6 @@
 
         function partLabel() {
             if (mixedQueue) return 'Mixed · ';
-            if (!compassParts) return '';
             return partKinds[selectedOperation] === 'checkin'
                 ? `${OPERATION_NAMES[selectedOperation]} check-in · `
                 : `${OPERATION_NAMES[selectedOperation]} · `;
@@ -2511,12 +2202,10 @@
                 return;
             }
 
-            const fluent = record
-                ? AutomathFacts.isFluent(record, isCorrect, ms)
-                : AutomathCore.isFluent(selectedOperation, isCorrect, ms);
+            const fluent = AutomathFacts.isFluent(record, isCorrect, ms);
             const key = currentProblemData.key
                 || AutomathCore.normalizeProblem(currentProblemData.num1, currentProblemData.num2, currentProblemData.operator);
-            if (record) AutomathFacts.recordAnswer(record, selectedOperation, key, isCorrect, ms, today);
+            AutomathFacts.recordAnswer(record, selectedOperation, key, isCorrect, ms, today);
             sessionHistory.push({
                 operation: selectedOperation,
                 key: key,
@@ -2566,7 +2255,7 @@
             const total = problemsFor(selectedOperation);
             reportPart({
                 part: selectedOperation,
-                index: listedParts ? listedParts.indexOf(selectedOperation) + 1 : 1,
+                index: listedParts.indexOf(selectedOperation) + 1,
                 total,
                 correct: correctAnswers,
                 fluent: opState[selectedOperation].fluent,
@@ -2574,7 +2263,7 @@
                 history: sessionHistory
             });
             runParts.push({ operation: selectedOperation, correct: correctAnswers, total, seconds, outcome: settleRecord(selectedOperation, sessionHistory) });
-            if (compassParts && partIndex < compassParts.length - 1) {
+            if (partIndex < compassParts.length - 1) {
                 showPartScreen();
             } else {
                 showResults();
@@ -2606,7 +2295,6 @@
         // Compass gets the whole record each time, so stopping partway keeps
         // what was learned. Returns what changed, for the screen.
         function settleRecord(op, history) {
-            if (!record) return null;
             const outcome = AutomathFacts.finishPart(record, op, partKinds[op] || 'practice',
                 history.map(item => ({ key: item.key, fluent: item.fluent })), today);
             reportState();
@@ -2669,14 +2357,14 @@
                 kind: 'part',
                 part: part.part,
                 index: part.index,
-                of: compassParts ? compassParts.length : 1,
+                of: compassParts.length,
                 mode: runMode,
                 status: 'finished',
                 check: partKinds[part.part] === 'checkin' || undefined,
                 correct: part.correct,
                 wrong: part.total - part.correct,
                 fluent: part.fluent,
-                fluentMs: record ? AutomathFacts.fluentLimit(record) : AutomathCore.FLUENT_MS[part.part],
+                fluentMs: AutomathFacts.fluentLimit(record),
                 seconds: part.seconds,
                 items: part.history.map(item => ({
                     prompt: `${item.num1} ${item.operator} ${item.num2}`,
@@ -2717,7 +2405,7 @@
         }
 
         function startNextPart() {
-            if (!compassParts || partIndex >= compassParts.length - 1) return;
+            if (partIndex >= compassParts.length - 1) return;
             stopFireworks();
             partIndex++;
             selectedOperation = compassParts[partIndex];
@@ -2828,9 +2516,7 @@
 
         // Every listed operation is graduated and none has a check-in due.
         function showNothingDue() {
-            startScreen.classList.remove('active');
             resultsScreen.classList.add('active');
-            restartBtn.classList.add('hidden');
             document.getElementById('resultsTitle').textContent = 'Nothing due today ✓';
             document.getElementById('resultsScore').innerHTML = '';
             document.getElementById('resultsMastery').textContent = 'Your facts are fluent. See you at your next check-in.';
@@ -2843,28 +2529,23 @@
             voiceSync();
 
             // Every screen shows the exercise just finished: its own score and its
-            // own problems. In Compass mode a table of every exercise in this
-            // visit follows, one score per operation.
+            // own problems, then a table of every exercise in this visit, one
+            // score per operation.
             const part = runParts[runParts.length - 1];
             renderMastery(document.getElementById('resultsMastery'), mixedQueue ? runParts : [part]);
             if (mixedQueue) {
                 // One set, so one score for it, then one row per operation so a
                 // weak operation still shows.
-                restartBtn.classList.add('hidden');
                 document.getElementById('resultsTitle').textContent = 'Mixed practice done ✓';
                 renderScore(document.getElementById('resultsScore'), correctAnswers, problemsInRun(), exerciseSeconds());
                 celebrateIfEarned(correctAnswers, problemsInRun());
                 runParts.sort((a, b) => compassParts.indexOf(a.operation) - compassParts.indexOf(b.operation));
                 renderSummary(false);
-            } else if (compassParts) {
-                restartBtn.classList.add('hidden');
+            } else {
                 document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
                 renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
                 celebrateIfEarned(part.correct, part.total);
                 renderSummary();
-            } else {
-                renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
-                celebrateIfEarned(part.correct, part.total);
             }
             renderReview(document.getElementById('reviewTableBody'), sessionHistory);
         }
@@ -2979,27 +2660,14 @@
             fireworksFrame = requestAnimationFrame(tick);
         }
 
-        function resetApp() {
-            stopFireworks();
-            resultsScreen.classList.remove('active');
-            startScreen.classList.add('active');
-            selectedOperation = null;
-            mixedQueue = null;
-            opState = {};
-            pendingRetries = [];
-            sessionHistory = [];
-            runParts = [];
-            awaitingAnswer = false;
-        }
-
-        // Compass chose the operations: skip the picker and start the first one.
-        // Graduated operations with no check-in due are reported done first.
+        // Start the first operation Compass listed (or all four, opened on its
+        // own). Graduated operations with no check-in due are reported done first.
         restingParts.forEach(reportRest);
-        if (compassParts && compassParts.length === 0) {
+        if (compassParts.length === 0) {
             showNothingDue();
-        } else if (compassParts && runMode === 'mixed') {
+        } else if (runMode === 'mixed') {
             startMixedPractice();
-        } else if (compassParts) {
+        } else {
             selectedOperation = compassParts[0];
             startPractice();
         }

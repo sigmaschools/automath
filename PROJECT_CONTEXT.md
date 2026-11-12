@@ -19,7 +19,7 @@
 - Adaptive progressive difficulty based on real-time performance
 - Clean, minimal interface free of distracting elements
 - Runs entirely in-browser with no backend required
-- Deployable to any static hosting (currently GitHub Pages)
+- Hosted on Vercel at https://sigma-automath.vercel.app/ and run inside Compass (Decision 27)
 
 ---
 
@@ -33,7 +33,7 @@
 - **Portability**: Easy to download, share, and run anywhere
 - **Simplicity**: No build process, no dependencies, no configuration
 - **Accessibility**: Students can open directly from local filesystem or web
-- **Deployment**: Simple GitHub Pages hosting with zero configuration
+- **Deployment**: Static hosting with zero configuration (Vercel)
 - **Maintenance**: Everything in one place, easy to understand and modify
 
 **Trade-offs**:
@@ -93,11 +93,9 @@
 - **Daily warmup context**: Students want to jump in quickly each morning
 
 **Flow**:
-1. Select operation (Addition/Subtraction/Multiplication/Division)
-2. Immediately start practice at Level 1
-3. Complete 10 problems with adaptive difficulty
-4. View results (score, accuracy, time)
-5. Click "Practice Again" to return to operation selection
+1. Compass opens the page with today's operations; the first starts at once
+2. Complete 10 problems per operation with adaptive difficulty
+3. View results (score, accuracy, time); Compass moves on
 
 ### Minimal UI Design
 
@@ -170,11 +168,12 @@
 - No complex data flow or component hierarchy
 - No routing (3 screens managed with CSS classes)
 
-### Deployment: GitHub Pages
-- **Why**: Free, fast, integrated with repository
-- **Configuration**: Deploy from `main`; changes arrive by pull request
-- **URL**: `https://sigmaschools.github.io/automath/` (Compass loads this same page)
-- **Updates**: Automatic on merge (1-2 minute deploy time); no Compass rebuild is needed
+### Deployment: Vercel (Decision 27)
+- **Why**: the same host as Sigma's other Compass apps; a preview link for every pull request; no 10-minute CDN cache
+- **Configuration**: Vercel project `automath` (Sigma School team), linked to this repository; `main` deploys production; no build step, it serves `index.html`
+- **URL**: `https://sigma-automath.vercel.app/` (Compass loads this page)
+- **Updates**: Automatic on merge (about a minute); no Compass rebuild is needed
+- **Old address**: `https://sigmaschools.github.io/automath/` redirects here, keeping the query and hash, except Compass launches (`compass_parts` in the query) until every Compass registry points at Vercel; then GitHub Pages can be switched off in the repository settings
 
 ---
 
@@ -183,7 +182,7 @@
 ```
 /home/user/automath/
 ├── automath.html          # Main application file
-├── index.html             # GitHub Pages entry point (copy of automath.html)
+├── index.html             # The page Vercel serves (copy of automath.html)
 ├── Claude.md              # Entry point - read this first each session
 ├── PROJECT_CONTEXT.md     # This file - technical documentation
 ├── DESIGN_RATIONALE.md    # Conceptual and decision documentation
@@ -200,7 +199,7 @@
 - The two rule blocks are loaded by `tests/load-core.js`, so they are tested without a browser
 
 **index.html**
-- Exact copy of automath.html for GitHub Pages root deployment
+- Exact copy of automath.html, the page Vercel serves at the root
 - Kept in sync via `cp automath.html index.html` before commits
 
 ---
@@ -264,7 +263,7 @@ To ensure high-quality practice sessions, the app implements validation to preve
 - Displays student's answer for each problem
 - Shows correct answer only when student got it wrong
 - Visual feedback: Green ✓ for correct, red row highlighting for incorrect
-- Positioned after summary stats and "Practice Again" button
+- Positioned after the summary stats
 
 **Table Structure**:
 | Problem | Your Answer | Correct Answer |
@@ -335,7 +334,7 @@ Managed via CSS classes (no routing library):
 - ✅ Clean, minimal UI with focused attention design
 - ✅ Responsive design (works on iPad and desktop)
 - ✅ Direct-to-practice flow (no intermediate screens)
-- ✅ GitHub Pages deployment
+- ✅ Hosted on Vercel; the old GitHub Pages address redirects (Decision 27)
 - ✅ Compass mode: `?compass_parts=` runs a list of operations in order and reports each finished one to Compass (see Decision 12 in DESIGN_RATIONALE.md)
 - ✅ Compass mode shows a large blue Next button between operations and colored score values (Decision 14); the "Exercise N of M" pills were removed again (Decision 15)
 - ✅ Compass mode alternates by the learner's local day between grouped operations and one mixed set that interleaves them (Decision 16)
@@ -346,13 +345,12 @@ Managed via CSS classes (no routing library):
 - ✅ In Compass, answers out loud use the Compass voice kit (contract 1.5), loaded from a listed Compass server named in the profile note; a misheard number waits for the learner instead of counting as a miss; tap-to-talk beside the answer box (Decision 24)
 - ✅ While answering out loud, a live waveform of the learner's voice replaces the number pad and the "I'm listening" label; "Type instead" brings the pad back; Enter appears for a misheard number (Decision 25)
 - ✅ A wrong spoken answer counts as a miss once the learner stops talking, with the right answer shown, so the Enter button for a held number is gone; a right answer shows its number with a green tick (Decision 26)
+- ✅ No standalone mode: no operation picker, no "Practice Again", no browser speech recognizer; opened without `compass_parts` the page runs all four operations (Decision 27)
 - ✅ A miss, typed or spoken, shows the learner's answer in red with a cross, then the right answer in green with no mark, then moves on (Decision 28)
 
 ### Known Limitations 🔄
-- Progress across sessions exists only in Compass runs (Compass keeps the `state` report and passes it back, app contract 0.4, live since 5 Nov 2026); outside Compass every exercise starts at Level 1
-- Mixed mode exists only in Compass runs (on even local days); the stand-alone picker still runs one operation at a time
+- Progress across sessions is kept by Compass (the `state` report, passed back as `compass_state`, app contract 0.4); a page opened without it starts a fresh record
 - A mixed set reports its operations only near its end (all four finish in the last round), so a learner who stops partway through a mixed set keeps none of it that visit
-- No keyboard shortcuts for operation selection
 - No accessibility labels (screen reader support)
 - No sound feedback
 - No parent/teacher visibility into progress
@@ -369,14 +367,7 @@ Managed via CSS classes (no routing library):
 
 ### High Priority (Aligned with Learning Science)
 
-**1. Progress Tracking on the Stand-Alone Page**
-- Built for Compass runs as a per-fact record with spaced review and graduation (Decision 19), kept by Compass rather than in the browser, which loses it between devices
-- Still to do, if wanted: the same outside Compass
-
-**2. Mixed Practice Mode** (built for Compass runs, Decision 16)
-- Still to do: an "All Operations" button on the stand-alone picker
-
-**3. Visual Progress Indicator**
+**1. Visual Progress Indicator**
 - Subtle dots or progress bar (e.g., "●●●○○○○○○○" for 3/10)
 - Non-distracting, helps students gauge progress
 - Could use CSS circles or Unicode characters
@@ -447,13 +438,13 @@ Managed via CSS classes (no routing library):
 3. Refresh browser to see updates
 4. No build process required
 
-### Deployment to GitHub Pages
+### Deployment (Vercel)
 1. Make changes to `automath.html`
 2. Copy to `index.html`: `cp automath.html index.html`
 3. Run `node --test`
-4. Commit on a branch, push, open a pull request to `main` (the test Action must pass)
-5. After the merge, wait 1-2 minutes for GitHub Pages
-6. Verify at `https://sigmaschools.github.io/automath/`
+4. Commit on a branch, push, open a pull request to `main` (the test Action must pass); Vercel posts a preview link on the pull request
+5. After the merge, about a minute for Vercel
+6. Verify at `https://sigma-automath.vercel.app/`
 
 ### Automated Tests
 `node --test` checks the practice rules (the `automath-core` script block) and that `index.html` and `automath.html` match; `node tests/simulate.js` prints how simulated learners move through the levels (add `--accuracy-only` to compare with the rules before Decision 18). `node tests/simulate-days.js` plays model learners through 180 days of warm-ups with the fact record (Decision 19) and prints when each operation graduates. All three run in a GitHub Action on every PR.
@@ -472,12 +463,11 @@ Managed via CSS classes (no routing library):
 - [ ] Review table shows all 10 problems with correct/incorrect marking
 - [ ] Review table shows correct answers only for incorrect problems
 - [ ] Time displays correctly (MM:SS format)
-- [ ] "Practice Again" button resets to start screen
 - [ ] Input field auto-focuses after each problem
 - [ ] Enter key submits answers
 - [ ] Horizontal results layout (Score, Accuracy, Time) wraps on mobile
-- [ ] `?compass_parts=subtraction,division`: no picker; Subtraction starts at once; the progress line names the operation; after 10 problems a "Subtraction done ✓" screen with Subtraction's own score, accuracy and time, "One more to go", "Start Division" and Subtraction's 10 problems; Division; the results screen shows Division's own score and 10 problems, a two-row table (Subtraction, Division) and no "Practice Again"; two `data-compass-report` blocks with `kind: "part"`
-- [ ] Unknown names in `compass_parts` are ignored; an empty or all-unknown list gives the normal picker
+- [ ] `?compass_parts=subtraction,division`: Subtraction starts at once; the progress line names the operation; after 10 problems a "Subtraction done ✓" screen with Subtraction's own score, accuracy and time, "One more to go", "Start Division" and Subtraction's 10 problems; Division; the results screen shows Division's own score and 10 problems and a two-row table (Subtraction, Division); two `data-compass-report` blocks with `kind: "part"`
+- [ ] Unknown names in `compass_parts` are ignored; an empty or all-unknown list (or none) runs all four operations
 - [ ] Compass run of 2+ operations, grouped (`&mode=grouped` or an odd local day): no "Exercise N of M" line or pills; between operations a large blue "Next: <operation> →" button under the score that takes Enter after 0.6 s; Score, Accuracy and Time in blue, teal and violet, matching the summary columns; each `part` report has `index`, `of` and `mode: "grouped"`
 - [ ] Compass run of 2+ operations, mixed (`&mode=mixed` or an even local day): one set of 10 × the operations, progress line "Mixed · Problem N of 40" with all four, never the same operation twice in a row, no screen between operations; each operation reported (`mode: "mixed"`, its own 10 items, `seconds` = sum of its response times) the moment its 10th problem is answered; results screen "Mixed practice done ✓" with the set's score, one row per operation in `compass_parts` order and every problem below
 - [ ] One operation in `compass_parts` always runs grouped
