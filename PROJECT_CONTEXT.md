@@ -345,6 +345,7 @@ Managed via CSS classes (no routing library):
 - ✅ Answer out loud: a microphone switch under the answer where the browser can recognize speech (Chrome, Edge, Safari); the number heard goes in the box and is checked; remembered per device; `voice=1`/`voice=0` forces it (Decision 23). Not yet inside Compass: both Compass shells deny the microphone
 - ✅ In Compass, answers out loud use the Compass voice kit (contract 1.5), loaded from a listed Compass server named in the profile note; a misheard number waits for the learner instead of counting as a miss; tap-to-talk beside the answer box (Decision 24)
 - ✅ While answering out loud, a live waveform of the learner's voice replaces the number pad and the "I'm listening" label; "Type instead" brings the pad back; Enter appears for a misheard number (Decision 25)
+- ✅ A wrong spoken answer counts as a miss once the learner stops talking, with the right answer shown, so the Enter button for a held number is gone; a right answer shows its number with a green tick (Decision 26)
 
 ### Known Limitations 🔄
 - Progress across sessions exists only in Compass runs (Compass keeps the `state` report and passes it back, app contract 0.4, live since 5 Nov 2026); outside Compass every exercise starts at Level 1

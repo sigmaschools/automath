@@ -704,6 +704,20 @@ App version 1.10.0.
 
 **Why**: the person running the project tried voice on an iPad and found the number pad awkward while answering out loud. A waveform shows at once that voice is on and that the learner is being heard, which a static label cannot.
 
+### Decision 26: A Wrong Spoken Answer Is a Miss; a Right Answer Shows Its Number (12 November 2026)
+
+**Decision**: Two changes from testing voice in the Compass Mac app:
+
+- **A wrong spoken answer counts as wrong.** Once the learner stops talking, a heard number that is not the answer is marked like a typed miss: the right answer shows with the red cross, the fact is recorded as missed, and it comes back once later in the set (Decision 18). A number heard while the learner is still talking only shows in the box. This replaces Decision 24's first rule, which held a wrong number unmarked until the learner pressed Enter: in testing nothing seemed to happen after a wrong answer, the learner said the right one next, and a set with deliberate mistakes ended at 100%.
+- **No Enter button for a heard number.** Decision 25's big Enter button under the waveform, for confirming a held wrong number, is gone, since a wrong number is no longer held.
+- **A right answer shows its number.** The answer stays in the box in green with a green tick beside it, typed or spoken, instead of a tick alone.
+
+App version 1.11.0.
+
+**Trade-off**: a mishearing now costs a miss in the score and the fact record, which Decision 24 avoided. The kit listens only for number words up to the operation's largest answer, so mishearings should be rare, and every spoken item still carries `heard` in the report when what was heard was not simply the answer recorded, so Compass data can show how often it happens. This departs from Compass app contract 1.5, section 15, rule 3 (hold a wrong number for the learner to confirm).
+
+**Tests**: `tests/speech.test.js` checks `AutomathSpeech.decide` (a final wrong number is `miss`, a partial one `wait`). Checked in Chromium with a stand-in kit: a right answer shows the green number and tick; a wrong number said and finished shows the right answer with the cross and moves on; the set scores 9/10 with one wrong answer, and the report item has `correct: false, voice: true`.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
