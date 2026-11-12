@@ -474,8 +474,7 @@
             animation: voice-pulse 1.2s ease-in-out infinite;
         }
 
-        #voiceBtn.on.preparing .voice-dot,
-        .mic-btn.on.preparing {
+        #voiceBtn.on.preparing .voice-dot {
             animation: none;
             opacity: 0.5;
         }
@@ -488,46 +487,6 @@
 
         .voice-note.hidden {
             display: none;
-        }
-
-        /* Tap-to-talk (Decision 24): one answer out loud, beside the answer box */
-        .mic-btn {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 52px;
-            height: 52px;
-            min-width: 0;
-            padding: 0;
-            margin: 0;
-            border-radius: 50%;
-            border: 1px solid #dddddd;
-            background: #ffffff;
-            color: #737373;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
-        }
-
-        .input-container:has(.mic-btn:not(.hidden)) input[type="number"] {
-            padding-right: 76px;
-        }
-
-        .mic-btn.hidden {
-            display: none;
-        }
-
-        .mic-btn svg {
-            width: 24px;
-            height: 24px;
-        }
-
-        .mic-btn.on {
-            color: #16a34a;
-            border-color: #86efac;
-            background: #f0fdf4;
         }
 
         /* Listening (Decision 25): while the learner answers out loud, a live
@@ -617,7 +576,6 @@
                 <div class="input-container">
                     <input type="number" id="answer" placeholder="?" autocomplete="off">
                     <span class="answer-mark" id="answerMark" aria-hidden="true"></span>
-                    <button type="button" class="mic-btn hidden" id="micBtn" aria-label="Tap and say the answer" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg></button>
                 </div>
             </div>
 
@@ -1394,7 +1352,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.14.0';
+        const APP_VERSION = '1.15.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1542,7 +1500,8 @@
         // recognizer inside the page, on the device, told only the number
         // words. The kit is loaded, when the learner first wants voice, from
         // the Compass server that launched the app, and only from a server on
-        // KIT_SERVERS. A tap-to-talk microphone sits beside the answer box.
+        // KIT_SERVERS. Voice is all or nothing: on ("Answer out loud")
+        //   or off ("Type instead"); there is no one-answer microphone (Decision 29).
         // Without the kit (no Compass profile note) there is no voice switch;
         // the browser's own recognizer was dropped with standalone mode
         // (Decision 27).
@@ -1558,9 +1517,7 @@
         const voiceEl = document.getElementById('voice');
         const voiceBtn = document.getElementById('voiceBtn');
         const voiceNote = document.getElementById('voiceNote');
-        const micBtn = document.getElementById('micBtn');
         const VOICE_KEY = 'automath.voice';
-        const NOISY_OTHERS = 3;          // kit: talk without an answer in it, this many times, before suggesting tap-to-talk
         const MIC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/></svg>';
         const voice = {
             on: false,        // the learner wants to answer out loud (hands-free)
@@ -1568,9 +1525,6 @@
             unavailable: false, // kit: this device cannot listen; typing works
             state: null,      // kit: the hands-free listener's state
             ear: null,        // kit: the hands-free listener
-            tap: null,        // kit: a tap-to-talk listener, while it listens
-            tapState: null,
-            othersBase: 0, noisyShown: false,
             held: null,       // { n, heard }: a heard number in the box while the learner is still talking
             last: null        // { values, text }: what was last heard for this problem, for the report
         };
@@ -1595,19 +1549,12 @@
             voiceBtn.className = voice.on ? 'hidden' : '';
             voiceBtn.innerHTML = MIC_ICON + (voice.blocked || voice.unavailable ? 'Microphone is off' : 'Answer out loud');
             voiceBtn.setAttribute('aria-pressed', voice.on ? 'true' : 'false');
-            // Tap-to-talk: kit only, while hands-free is off and the device can listen.
-            const tapShown = voiceEngine === 'kit' && !voice.on && !voice.blocked && !voice.unavailable;
-            micBtn.classList.toggle('hidden', !tapShown);
-            const tapOn = !!voice.tap && voice.tapState !== 'off';
-            micBtn.classList.toggle('on', tapOn);
-            micBtn.classList.toggle('preparing', tapOn && voice.tapState === 'preparing');
-            micBtn.setAttribute('aria-pressed', tapOn ? 'true' : 'false');
-            renderListening(tapOn);
+            renderListening();
         }
 
         // ---- Listening: a live waveform in the number pad's place (Decision 25) ----
         //
-        // Shown while hands-free voice is on, and while a tap-to-talk listens.
+        // Shown while voice is on.
         // The bars follow the loudness of the microphone, so a learner sees at
         // once that they are being heard. Hands-free also offers "Type instead"
         // (turns voice off and brings the number pad back) and, while a heard
@@ -1628,11 +1575,11 @@
         const wave = { raf: 0, levels: new Array(WAVE_BARS).fill(0), lastStep: 0, smooth: 0, color: null, colorOp: null };
         const meter = { stream: null, ctx: null, analyser: null, buf: null, opening: false, failed: false };
 
-        function renderListening(tapOn) {
-            const listening = voice.on || (voiceEngine === 'kit' && tapOn);
+        function renderListening() {
+            const listening = voice.on;
             listenEl.classList.toggle('hidden', !listening);
             if (useKeypad) keypad.classList.toggle('hidden', listening);
-            const preparing = voice.on ? voice.state === 'preparing' : voice.tapState === 'preparing';
+            const preparing = voiceEngine === 'kit' && voice.state === 'preparing';
             listenCaption.textContent = listening && preparing ? 'Getting ready…' : '';
             waveCanvas.setAttribute('aria-label', preparing ? 'Getting ready to listen' : 'Listening');
             typeBtn.classList.toggle('hidden', !voice.on);
@@ -1643,11 +1590,11 @@
         function waveLive() {
             if (document.hidden || !practiceScreen.classList.contains('active')) return false;
             if (voiceEngine !== 'kit') return false;
-            return voice.on ? voice.state === 'listening' : (!!voice.tap && voice.tapState === 'listening');
+            return voice.on && voice.state === 'listening';
         }
 
         function kitLevel() {
-            const l = voiceEngine === 'kit' ? (voice.on ? voice.ear : voice.tap) : null;
+            const l = voiceEngine === 'kit' ? voice.ear : null;
             return l && typeof l.level === 'number' ? Math.max(0, Math.min(1, l.level)) : null;
         }
 
@@ -1860,26 +1807,14 @@
             if (voice.ear) { try { voice.ear.stop(); } catch (e) { /* stopped */ } }
             voice.ear = null;
             voice.state = null;
-            stopTap();
         }
 
-        function stopTap() {
-            if (voice.tap) { try { voice.tap.stop(); } catch (e) { /* stopped */ } }
-            voice.tap = null;
-            voice.tapState = null;
-        }
-
-        function onKitState(state, isTap) {
+        function onKitState(state) {
             if (state === 'blocked' || state === 'unavailable') {
                 kitUnavailable(state === 'blocked');
                 return;
             }
-            if (isTap) {
-                voice.tapState = state;
-                if (state === 'off') voice.tap = null;
-            } else {
-                voice.state = state;
-            }
+            voice.state = state;
             renderVoice();
         }
 
@@ -1902,11 +1837,10 @@
         function kitSync() {
             const wanted = voice.on && practiceScreen.classList.contains('active');
             if (!wanted) {
-                if (voice.ear || voice.tap) { stopKit(); renderVoice(); }
+                if (voice.ear) { stopKit(); renderVoice(); }
                 return;
             }
             if (voice.ear) return;
-            stopTap();
             voice.state = 'preparing';
             renderVoice();
             loadKit().then(ok => {
@@ -1916,50 +1850,14 @@
                     voice.ear = CompassVoice.listen({
                         expect: 'number',
                         max: maxAnswer(),
-                        onState: (state) => onKitState(state, false),
+                        onState: onKitState,
                         onHeard: onKitHeard
                     });
-                    voice.othersBase = voice.ear.room ? voice.ear.room.others : 0;
-                    if (voice.ear.state) onKitState(voice.ear.state, false);
+                    if (voice.ear.state) onKitState(voice.ear.state);
                 } catch (e) {
                     kitUnavailable(false);
                 }
             });
-        }
-
-        // Tap-to-talk: one answer, then the microphone goes off again. Best in a
-        // room where other people are talking.
-        function tapToTalk() {
-            if (!awaitingAnswer) return;
-            if (voice.tap) { stopTap(); renderVoice(); return; }
-            voice.tapState = 'preparing';
-            voice.tap = {};  // holds the place while the kit loads
-            renderVoice();
-            loadKit().then(ok => {
-                if (!ok) { kitUnavailable(false); return; }
-                if (!voice.tap || voice.tap.stop) return;  // tapped off meanwhile
-                try {
-                    voice.tap = CompassVoice.listen({
-                        expect: 'number',
-                        once: true,
-                        max: maxAnswer(),
-                        onState: (state) => onKitState(state, true),
-                        onHeard: onKitHeard
-                    });
-                    if (voice.tap && voice.tap.state) onKitState(voice.tap.state, true);
-                } catch (e) {
-                    kitUnavailable(false);
-                }
-            });
-        }
-
-        // Others keep talking near the microphone: suggest tap-to-talk, once.
-        function checkNoise() {
-            if (voice.noisyShown || !voice.ear || !voice.ear.room) return;
-            if (voice.ear.room.others - voice.othersBase >= NOISY_OTHERS) {
-                voice.noisyShown = true;
-                showVoiceNote('It’s noisy here. Tap the microphone when you answer.');
-            }
         }
 
         // Start or stop the listening to match what the page needs now.
@@ -1974,11 +1872,9 @@
             voice.held = null;
             voice.last = null;
             if (voiceEngine === 'kit') {
-                stopTap();
                 renderVoice();
                 if (voice.ear) {
                     try { voice.ear.next({ max: maxAnswer() }); } catch (e) { /* stopped */ }
-                    checkNoise();
                 }
             }
             voiceSync();
@@ -1989,7 +1885,6 @@
         function voiceAnswered() {
             voice.held = null;
             if (!voiceEngine) return;
-            if (voice.tap) stopTap();
             renderVoice();
         }
 
@@ -2020,10 +1915,6 @@
             renderVoice();
             voiceBtn.addEventListener('click', () => {
                 setVoice(!voice.on);
-                if (!useKeypad) answerInput.focus();
-            });
-            micBtn.addEventListener('click', () => {
-                tapToTalk();
                 if (!useKeypad) answerInput.focus();
             });
             answerInput.addEventListener('input', voiceTyped);

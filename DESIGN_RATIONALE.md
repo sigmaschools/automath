@@ -743,6 +743,16 @@ App version 1.13.0. (Numbered after Decision 27, Vercel hosting, which was still
 
 **Tests**: checked in Chromium with a stand-in Compass voice kit: hearing "300" for 3 + 2 shows 300 in red with the cross, then 5 in green with no mark, then problem 2; a typed 99 does the same, and typing during the feedback leaves the box alone. `node --test` passes.
 
+### Decision 29: Voice Is On or Off; No One-Answer Microphone (12 November 2026)
+
+**Decision**: The tap-to-talk microphone at the right of the answer box (Decision 24) is gone. Answering out loud has two modes only: voice on ("Answer out loud" under the answer, then the waveform with "Type instead") or voice off (typing). The "It's noisy here. Tap the microphone when you answer." note, which pointed at that button, is gone with it.
+
+App version 1.15.0.
+
+**Why**: testing in Compass, the person running the project tapped the microphone in the answer box and found it answered one question by voice and then went back to typing, beside an "Answer out loud" switch that does something else. Two ways into voice that behave differently is confusing for a child; one switch with a clear way back is not.
+
+**Tests**: `node --test` passes. Checked in Chromium with a stand-in Compass voice kit: in typing mode the answer box has no microphone and "Answer out loud" shows below it; tapping it starts the listener and the waveform with "Type instead"; "Type instead" stops the listener and brings typing back. No page errors.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

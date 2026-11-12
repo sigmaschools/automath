@@ -342,11 +342,12 @@ Managed via CSS classes (no routing library):
 - ✅ Fluency (correct within 3 s) drives levelling up and is reported; misses show the right answer and come back once; level 4 is facts crossing ten; hidden-page time not counted; on-screen number pad on touch screens; `node --test` and a simulator in `tests/` (Decision 18)
 - ✅ Per-fact record across days via Compass (`state` report, `compass_state` launch parameter): sessions aimed at weak and due facts, spaced review, operations graduate and get check-ins (Decision 19)
 - ✅ Answer out loud: a microphone switch under the answer where the browser can recognize speech (Chrome, Edge, Safari); the number heard goes in the box and is checked; remembered per device; `voice=1`/`voice=0` forces it (Decision 23). Not yet inside Compass: both Compass shells deny the microphone
-- ✅ In Compass, answers out loud use the Compass voice kit (contract 1.5), loaded from a listed Compass server named in the profile note; a misheard number waits for the learner instead of counting as a miss; tap-to-talk beside the answer box (Decision 24)
+- ✅ In Compass, answers out loud use the Compass voice kit (contract 1.5), loaded from a listed Compass server named in the profile note; a misheard number waits for the learner instead of counting as a miss; tap-to-talk beside the answer box (Decision 24, removed by Decision 29)
 - ✅ While answering out loud, a live waveform of the learner's voice replaces the number pad and the "I'm listening" label; "Type instead" brings the pad back; Enter appears for a misheard number (Decision 25)
 - ✅ A wrong spoken answer counts as a miss once the learner stops talking, with the right answer shown, so the Enter button for a held number is gone; a right answer shows its number with a green tick (Decision 26)
 - ✅ No standalone mode: no operation picker, no "Practice Again", no browser speech recognizer; opened without `compass_parts` the page runs all four operations (Decision 27)
 - ✅ A miss, typed or spoken, shows the learner's answer in red with a cross, then the right answer in green with no mark, then moves on (Decision 28)
+- ✅ Voice is either on or off: the one-answer microphone in the answer box is gone, so "Answer out loud" and "Type instead" are the only switches (Decision 29)
 
 ### Known Limitations 🔄
 - Progress across sessions is kept by Compass (the `state` report, passed back as `compass_state`, app contract 0.4); a page opened without it starts a fresh record
