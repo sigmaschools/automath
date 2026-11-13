@@ -7,15 +7,26 @@ const speech = loadSpeech();
 
 // Compass voice kit (Decision 24, app contract 1.5 section 15).
 
-test('a heard right answer counts at once, even before the learner stops talking', () => {
-    assert.equal(speech.decide(12, false, 12), 'accept');
-    assert.equal(speech.decide(12, true, 12), 'accept');
+test('the box shows the last number said, for the learner to confirm (Decision 31)', () => {
+    assert.equal(speech.pick([12], 12), 12);
+    assert.equal(speech.pick([7], 12), 7);
+    assert.equal(speech.pick([7, 8], 8), 8);
+    assert.equal(speech.pick([], 12), null);
+    assert.equal(speech.pick(undefined, 12), null);
 });
 
-test('a heard wrong number is a miss once the learner stops talking (Decision 26)', () => {
-    assert.equal(speech.decide(13, false, 12), 'wait');
-    assert.equal(speech.decide(13, true, 12), 'miss');
-    assert.equal(speech.decide(0, true, 12), 'miss');
+test('a teen/ty mix-up of the answer shows the answer (Decision 31)', () => {
+    assert.equal(speech.pick([30], 13), 13);
+    assert.equal(speech.pick([13], 30), 30);
+    assert.equal(speech.pick([90], 19), 19);
+    assert.equal(speech.pick([16], 60), 60);
+    // Only the answer's own partner: other numbers are shown as heard.
+    assert.equal(speech.pick([40], 13), 40);
+    assert.equal(speech.pick([30], 12), 30);
+    assert.equal(speech.pick([20], 12), 20);
+    assert.equal(speech.pick([12], 20), 12);
+    assert.equal(speech.pick([31], 13), 31);
+    assert.equal(speech.teenTy(13, 13), 13);
 });
 
 test('the report notes what was heard only when it was not simply the answer recorded', () => {

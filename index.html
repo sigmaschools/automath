@@ -473,7 +473,28 @@
             margin: 4px 0 6px 0;
         }
 
-        #typeBtn.hidden {
+        /* Enter for a heard number (Decision 31): the learner checks the box
+           shows what they meant, then sends it. Dimmed until a number is heard. */
+        #voiceEnter {
+            display: block;
+            width: 100%;
+            height: 64px;
+            margin: 6px 0 10px 0;
+            padding: 0;
+            background: #2563eb;
+            border: 1px solid #2563eb;
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 600;
+            touch-action: manipulation;
+        }
+
+        #voiceEnter:disabled {
+            opacity: 0.35;
+        }
+
+        #voiceEnter.hidden, #typeBtn.hidden {
             display: none;
         }
 
@@ -544,6 +565,7 @@
             <div class="listen hidden" id="listen">
                 <canvas id="wave" role="img" aria-label="Listening"></canvas>
                 <div class="listen-caption" id="listenCaption" aria-live="polite"></div>
+                <button type="button" id="voiceEnter" disabled>Enter</button>
                 <button type="button" id="typeBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Type instead</button>
             </div>
 
@@ -1260,19 +1282,32 @@
         })();
     </script>
     <script id="automath-speech">
-        // Spoken answers (Decisions 23, 24, 26): what to do with a number the
+        // Spoken answers (Decisions 23, 24, 26, 31): what to do with a number the
         // Compass voice kit heard. Kept free of the DOM so tests/ can load it.
         const AutomathSpeech = (() => {
-            // What to do with a number heard for the problem on screen
-            // (Decision 26): the right answer counts at once; any other number
-            // counts as a miss once the learner has stopped talking (`final`),
-            // and until then it only shows in the box. A spoken answer is
-            // marked like a typed one, so a wrong answer is never waved through.
-            // (This departs from Compass app contract 1.5, section 15, rule 3,
-            // which holds a wrong number for the learner to confirm.)
-            function decide(heard, final, answer) {
-                if (heard === answer) return 'accept';
-                return final ? 'miss' : 'wait';
+            // The number to show in the box for what was heard (Decision 31).
+            // The learner confirms it with Enter, so this only chooses what
+            // they see: the last number said (they may correct themselves:
+            // "seven… eight"), with a teen/ty mix-up of the answer read as
+            // the answer.
+            function pick(values, answer) {
+                if (!Array.isArray(values) || values.length === 0) return null;
+                return teenTy(values[values.length - 1], answer);
+            }
+
+            // Thirteen and thirty (up to nineteen and ninety) differ by one
+            // ending syllable, which recognizers often get wrong, while a child
+            // who knows 6 + 7 rarely answers "thirty". So when the answer is
+            // one of such a pair and the other one is heard, the learner most
+            // likely said the answer (Decision 31). The report keeps the
+            // heard words, so the data can show how often this happens.
+            function teenTy(heard, answer) {
+                if (heard === answer) return heard;
+                for (let d = 3; d <= 9; d++) {
+                    const teen = 10 + d, ty = d * 10;
+                    if ((heard === teen && answer === ty) || (heard === ty && answer === teen)) return answer;
+                }
+                return heard;
             }
 
             // The `heard` text for a report item (rule 8): what was said, when it
@@ -1301,7 +1336,7 @@
                 }
             }
 
-            return { decide, heardNote, profileIssuer };
+            return { pick, teenTy, heardNote, profileIssuer };
         })();
     </script>
     <script>
@@ -1313,7 +1348,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.19.0';
+        const APP_VERSION = '1.20.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1447,11 +1482,12 @@
             });
         }
 
-        // Answer out loud (Decision 23, Decision 24, Decision 26). A number heard
-        // goes in the answer box. The right answer counts at once; any other
-        // number counts as a miss once the learner stops talking, and the right
-        // answer is shown, as for a typed miss. The number pad and keyboard
-        // still work. The switch stays on between visits on this device.
+        // Answer out loud (Decisions 23, 24, 26, 31). A number heard goes in
+        // the answer box and waits there: the learner checks it and presses
+        // Enter (the button under the waveform, or the keyboard) to send it,
+        // and it is marked like a typed answer. Saying another number
+        // replaces it, so mumbling or singing never answers by itself. A
+        // teen/ty mix-up of the answer (13 heard as 30) shows the answer. The switch stays on between visits on this device.
         // `voice=1` or `voice=0` in the URL forces it on or off (for testing).
         //
         // Voice uses the Compass voice kit (app contract 1.5, section 15): a
@@ -1483,7 +1519,7 @@
             unavailable: false, // kit: this device cannot listen; typing works
             state: null,      // kit: the hands-free listener's state
             ear: null,        // kit: the hands-free listener
-            held: null,       // { n, heard }: a heard number in the box while the learner is still talking
+            held: null,       // { n, heard, ms }: a heard number in the box, waiting for Enter (Decision 31)
             last: null        // { values, text }: what was last heard for this problem, for the report
         };
 
@@ -1515,8 +1551,8 @@
         // Shown while voice is on.
         // The bars follow the loudness of the microphone, so a learner sees at
         // once that they are being heard. Hands-free also offers "Type instead"
-        // (turns voice off and brings the number pad back) and, while a heard
-        // number waits in the box (rule 3), an Enter button to confirm it.
+        // (turns voice off and brings the number pad back) and an Enter button
+        // that sends the heard number in the box (Decision 31).
         //
         // The loudness comes from the listener's own `level` (0 to 1) when the
         // kit gives one, otherwise from a meter on the microphone opened only
@@ -1526,6 +1562,7 @@
         const waveCanvas = document.getElementById('wave');
         const listenCaption = document.getElementById('listenCaption');
         const typeBtn = document.getElementById('typeBtn');
+        const voiceEnter = document.getElementById('voiceEnter');
         const WAVE_BARS = 28;
         const WAVE_STEP_MS = 60;     // a new bar this often; the bars move left
         const WAVE_FLOOR_DB = -55;   // this quiet or quieter: a dot
@@ -1541,7 +1578,15 @@
             listenCaption.textContent = listening && preparing ? 'Getting ready…' : '';
             waveCanvas.setAttribute('aria-label', preparing ? 'Getting ready to listen' : 'Listening');
             typeBtn.classList.toggle('hidden', !voice.on);
+            renderEnter();
             waveSync();
+        }
+
+        // Enter under the waveform (Decision 31): shown while voice is on,
+        // usable once there is a number in the box to send.
+        function renderEnter() {
+            voiceEnter.classList.toggle('hidden', !voice.on);
+            voiceEnter.disabled = !(voice.on && awaitingAnswer && answerInput.value !== '');
         }
 
         // The microphone is listening for an answer right now.
@@ -1711,27 +1756,22 @@
 
         // A number was heard for the problem on screen. `ms` is the response
         // time to when it was said; `heard` is { values, text } for the report.
-        function voiceHeard(n, final, ms, heard) {
-            if (!awaitingAnswer) return;
+        // It goes in the box and waits there until the learner presses Enter
+        // (Decision 31); saying another number replaces it, typing over it
+        // makes it typed.
+        function voiceHeard(n, ms, heard) {
+            if (!awaitingAnswer || n === null) return;
             voice.last = heard;
+            voice.held = { n, heard, ms };
             answerInput.value = String(n);
-            const decision = AutomathSpeech.decide(n, final, currentProblemData.answer);
-            if (decision === 'wait') {
-                // Shown, not yet marked: saying more or typing replaces it.
-                voice.held = { n, heard };
-                if (!useKeypad) answerInput.select();
-                return;
-            }
-            // Right or wrong, a finished spoken answer is marked (Decision 26).
-            voice.held = null;
-            checkAnswer({ ms, heard });
+            if (!useKeypad) answerInput.select();
+            renderEnter();
         }
 
         // The learner typed or tapped over a heard number: it is theirs now.
         function voiceTyped() {
-            const wasHeld = !!voice.held;
             voice.held = null;
-            if (wasHeld && voiceEngine) renderVoice();
+            renderEnter();
         }
 
         // ---- The Compass voice kit ----
@@ -1778,9 +1818,8 @@
 
         function onKitHeard(heard) {
             if (!awaitingAnswer || !heard || !Array.isArray(heard.values) || heard.values.length === 0) return;
-            // Timed practice: the first number said counts (rule 4).
-            const n = heard.values[0];
-            voiceHeard(n, !!heard.final, msAt(heard.at), { values: heard.values.slice(), text: heard.text });
+            const n = AutomathSpeech.pick(heard.values, currentProblemData.answer);
+            voiceHeard(n, msAt(heard.at), { values: heard.values.slice(), text: heard.text });
         }
 
         // Response time to a moment given in performance.now() time.
@@ -1879,6 +1918,16 @@
             typeBtn.addEventListener('click', () => {
                 setVoice(false);
                 if (!useKeypad) answerInput.focus();
+            });
+            voiceEnter.addEventListener('click', () => {
+                checkAnswer();
+                if (!useKeypad) answerInput.focus();
+            });
+            // The Enter key sends a heard number even when the answer box
+            // does not have the focus (a click elsewhere on a computer).
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && voice.on && e.target !== answerInput
+                    && !(e.target && e.target.closest && e.target.closest('button'))) checkAnswer();
             });
         }
 
@@ -2030,17 +2079,15 @@
             return WRONG_MS + CORRECTION_MS;
         }
 
-        // `spoken` is set for an answer said out loud: { ms, heard } with the
-        // time from the problem appearing to the number being said. A heard
-        // number the learner sends with Enter before it is marked is spoken
-        // too, timed to Enter.
-        function checkAnswer(spoken) {
+        // A heard number in the box that the learner sends with Enter is a
+        // spoken answer (Decision 31), timed from the problem appearing to the
+        // number being said, so pressing Enter does not count against fluency.
+        function checkAnswer() {
             if (!awaitingAnswer) return;
             const userAnswer = parseInt(answerInput.value);
             if (isNaN(userAnswer)) return;
-            if (!spoken && voice.held && voice.held.n === userAnswer) {
-                spoken = { ms: responseMs(), heard: voice.held.heard };
-            }
+            const spoken = voice.held && voice.held.n === userAnswer
+                ? { ms: voice.held.ms, heard: voice.held.heard } : null;
             const heard = AutomathSpeech.heardNote(spoken ? spoken.heard : voice.last, userAnswer);
             awaitingAnswer = false;
             voiceAnswered();
