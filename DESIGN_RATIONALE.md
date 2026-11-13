@@ -753,6 +753,17 @@ App version 1.15.0.
 
 **Tests**: `node --test` passes. Checked in Chromium with a stand-in Compass voice kit: in typing mode the answer box has no microphone and "Answer out loud" shows below it; tapping it starts the listener and the waveform with "Type instead"; "Type instead" stops the listener and brings typing back. No page errors.
 
+### Decision 30: Grouped Days Run as One Sequence (12 November 2026)
+
+**Decision**: On a grouped day (Decision 16) the operations still come one block after another, 10 problems each, but there is no screen between them any more. When one operation's last problem (and its retries) is answered, the next operation's first problem follows at once, in its own color and with its name on the problem line. The line counts through the whole run, "Subtraction · Problem 11 of 40", as a mixed day does. The results screen at the end says "Practice done ✓" with one score, accuracy and time for the whole run, one row per operation, the mastery line for each operation, and every problem to review. Each operation's `part` and `state` reports still appear the moment it finishes, so stopping partway keeps what was done. The "Next: Subtraction →" button, its "or press Enter" hint and the "N more to go" line (Decisions 14 and 15) are gone. A run of one operation is unchanged.
+
+App version 1.19.0.
+
+**Why**: testing in Compass, the person running the project found the click-through between operations awkward and asked for all the questions to run in a single sequence. The pause broke the flow of a warm-up that is meant to be quick, and the per-operation score it showed is still on the results screen, one row per operation.
+
+**Alternatives considered**: a short automatic interstitial ("Next: Subtraction") with no button (still a pause, and the color and name change already mark the switch); interleaving the operations every day (that is the mixed day; the grouped day keeps each operation's practice concentrated).
+
+**Tests**: `node --test` passes. Checked in Chromium with `?compass_parts=addition,subtraction,multiplication,division&mode=grouped`: answering straight through goes from Addition problem 10 to Subtraction problem 11 of 40 with no screen between, four `part` reports appear one at a time, and the results screen shows "Practice done ✓", 40/40, four summary rows and 40 problems in the review. No page errors.
 ### Decision 32: Report Every Fact's Stage for the Fact Chart in Compass (13 November 2026)
 
 **Decision**: At the end of every visit, beside its `state` report, Automath puts a `mastery` report in the page: `{ kind: "mastery", title: "Math facts", subject: "math", groups: [...] }`, one group per operation (Addition, Subtraction, Multiplication, Division), each listing every fact as `{ label: "7 × 8 = 56", stage }`, with `stage` one of `unseen`, `learning`, `fluent`, `mastered` (the fact table's states). Addition and multiplication facts run by the smaller number; subtraction and division by the number taken away or divided by, so each fact family sits together. About 19 KB for all 477 facts.
