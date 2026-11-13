@@ -757,13 +757,22 @@ App version 1.15.0.
 
 **Decision**: On a grouped day (Decision 16) the operations still come one block after another, 10 problems each, but there is no screen between them any more. When one operation's last problem (and its retries) is answered, the next operation's first problem follows at once, in its own color and with its name on the problem line. The line counts through the whole run, "Subtraction · Problem 11 of 40", as a mixed day does. The results screen at the end says "Practice done ✓" with one score, accuracy and time for the whole run, one row per operation, the mastery line for each operation, and every problem to review. Each operation's `part` and `state` reports still appear the moment it finishes, so stopping partway keeps what was done. The "Next: Subtraction →" button, its "or press Enter" hint and the "N more to go" line (Decisions 14 and 15) are gone. A run of one operation is unchanged.
 
-App version 1.16.0.
+App version 1.19.0.
 
 **Why**: testing in Compass, the person running the project found the click-through between operations awkward and asked for all the questions to run in a single sequence. The pause broke the flow of a warm-up that is meant to be quick, and the per-operation score it showed is still on the results screen, one row per operation.
 
 **Alternatives considered**: a short automatic interstitial ("Next: Subtraction") with no button (still a pause, and the color and name change already mark the switch); interleaving the operations every day (that is the mixed day; the grouped day keeps each operation's practice concentrated).
 
 **Tests**: `node --test` passes. Checked in Chromium with `?compass_parts=addition,subtraction,multiplication,division&mode=grouped`: answering straight through goes from Addition problem 10 to Subtraction problem 11 of 40 with no screen between, four `part` reports appear one at a time, and the results screen shows "Practice done ✓", 40/40, four summary rows and 40 problems in the review. No page errors.
+### Decision 32: Report Every Fact's Stage for the Fact Chart in Compass (13 November 2026)
+
+**Decision**: At the end of every visit, beside its `state` report, Automath puts a `mastery` report in the page: `{ kind: "mastery", title: "Math facts", subject: "math", groups: [...] }`, one group per operation (Addition, Subtraction, Multiplication, Division), each listing every fact as `{ label: "7 × 8 = 56", stage }`, with `stage` one of `unseen`, `learning`, `fluent`, `mastered` (the fact table's states). Addition and multiplication facts run by the smaller number; subtraction and division by the number taken away or divided by, so each fact family sits together. About 19 KB for all 477 facts.
+
+App version 1.18.0. (Numbered after Decisions 30 and 31, still open in pull requests #27 and #28 when this was written.)
+
+**Why**: the person running the project wants a chart guides and parents use to see which facts a student has mastered: one square per fact, like GitHub's contribution grid, empty for facts not yet seen and filling in toward green as facts are mastered, hover or tap showing the fact and its stage, grouped by operation. Automath runs only inside Compass and has no screen for adults, so the person chose (13 November) to draw the chart in Compass, on the week screen parents read and guides see as the Report tab, from a new general app report that any app can send (Spell's patterns could use it too). Compass never reads inside the `state` record, so Automath spells the stages out. Compass's side (accepting, keeping and drawing the report, app contract 1.12) is built in the Compass project; until it is live, Compass keeps the report and lists it under the session's report problems as an unknown kind, which changes nothing for the learner.
+
+**Tests**: `tests/facts.test.js` checks every fact appears once with the right stage, the four groups and their sizes, the family order and the size. Checked in Chromium: a multiplication visit ends with `part`, `state` and `mastery` reports, the last with 477 facts and the 10 facts just answered fast marked `fluent`. No page errors.
 
 ## Lessons Learned
 

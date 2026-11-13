@@ -348,6 +348,7 @@ Managed via CSS classes (no routing library):
 - ✅ No standalone mode: no operation picker, no "Practice Again", no browser speech recognizer; opened without `compass_parts` the page runs all four operations (Decision 27)
 - ✅ A miss, typed or spoken, shows the learner's answer in red with a cross, then the right answer in green with no mark, then moves on (Decision 28)
 - ✅ Voice is either on or off: the one-answer microphone in the answer box is gone, so "Answer out loud" and "Type instead" are the only switches (Decision 29)
+- ✅ Each visit also sends a `mastery` report listing every fact and its stage (unseen, learning, fluent, mastered), by operation, for the fact chart Compass draws for guides and parents (Decision 32)
 
 ### Known Limitations 🔄
 - Progress across sessions is kept by Compass (the `state` report, passed back as `compass_state`, app contract 0.4); a page opened without it starts a fresh record

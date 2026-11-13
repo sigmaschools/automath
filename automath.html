@@ -1037,6 +1037,33 @@
                 return c;
             }
 
+            // ---- The fact chart for guides and parents (Decision 32) ----
+            // Every fact and its stage, as a Compass `mastery` report: Compass
+            // draws one square per fact on the week screen guides and parents
+            // read, so it needs the stages spelled out (the `state` record is
+            // opaque to it). Addition and multiplication run by the smaller
+            // number, subtraction and division by the number taken away or
+            // divided by, so each fact family sits together.
+            const STAGES = ['unseen', 'learning', 'fluent', 'mastered'];
+            const GROUP_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
+            const BY_SECOND = { subtraction: true, division: true };
+            function masteryReport(rec) {
+                const groups = OPS.map(op => {
+                    const order = TABLE[op].map((t, i) => i);
+                    if (BY_SECOND[op]) {
+                        order.sort((x, y) => TABLE[op][x].num2 - TABLE[op][y].num2 || TABLE[op][x].num1 - TABLE[op][y].num1);
+                    }
+                    return {
+                        name: GROUP_NAMES[op],
+                        items: order.map(i => {
+                            const t = TABLE[op][i];
+                            return { label: `${t.num1} ${t.operator} ${t.num2} = ${t.answer}`, stage: STAGES[rec.facts[op][i].s] };
+                        })
+                    };
+                });
+                return { kind: 'mastery', title: 'Math facts', subject: 'math', groups };
+            }
+
             // ---- Choosing the problems ----
             function shuffle(list, rand) {
                 for (let i = list.length - 1; i > 0; i--) {
@@ -1227,7 +1254,7 @@
 
             return {
                 OPS, UNSEEN, LEARNING, FLUENT, MASTERED, INTERVALS, CHECKIN_DAYS, SESSION, CHECKIN, TABLE,
-                create, encode, decode, fluentLimit, isFluent, recordAnswer, counts,
+                create, encode, decode, fluentLimit, isFluent, recordAnswer, counts, masteryReport,
                 planSession, planCheckin, isGraduated, todayKind, ready, finishPart, dueDays, isoDay, localDay
             };
         })();
@@ -1286,7 +1313,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.16.0';
+        const APP_VERSION = '1.19.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -2162,6 +2189,9 @@
                 fluentMs: AutomathFacts.fluentLimit(record),
                 appVersion: APP_VERSION
             });
+            // Every fact's stage, for the fact chart guides and parents read
+            // in Compass (Decision 32).
+            putReport({ ...AutomathFacts.masteryReport(record), appVersion: APP_VERSION });
         }
 
         // A graduated operation with no check-in due: done today, nothing to ask.
