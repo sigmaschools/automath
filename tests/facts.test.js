@@ -224,3 +224,33 @@ test('a mixed queue follows each operation\'s own count', () => {
         }
     }
 });
+
+test('the mastery report lists every fact with its stage, by operation, families together (Decision 32)', () => {
+    const rec = F.create(DAY);
+    const at = (op, key) => rec.facts[op][F.TABLE[op].findIndex(f => f.key === key)];
+    at('multiplication', '7,8,×').s = F.MASTERED;
+    at('multiplication', '6,7,×').s = F.LEARNING;
+    at('division', '56,8,÷').s = F.FLUENT;
+    const r = JSON.parse(JSON.stringify(F.masteryReport(rec))); // as Compass reads it
+    assert.equal(r.kind, 'mastery');
+    assert.equal(r.title, 'Math facts');
+    assert.deepEqual(r.groups.map(g => g.name), ['Addition', 'Subtraction', 'Multiplication', 'Division']);
+    assert.deepEqual(r.groups.map(g => g.items.length), [100, 145, 90, 142]);
+    const all = r.groups.flatMap(g => g.items);
+    assert.ok(all.every(i => ['unseen', 'learning', 'fluent', 'mastered'].includes(i.stage)));
+    assert.ok(all.every(i => i.label.length <= 60));
+    const find = label => all.find(i => i.label === label);
+    assert.equal(find('7 × 8 = 56').stage, 'mastered');
+    assert.equal(find('6 × 7 = 42').stage, 'learning');
+    assert.equal(find('56 ÷ 8 = 7').stage, 'fluent');
+    assert.equal(find('12 − 5 = 7').stage, 'unseen');
+    assert.equal(find('3 + 8 = 11').stage, 'unseen');
+    assert.equal(new Set(all.map(i => i.label)).size, all.length, 'each fact once');
+    // Subtraction and division run by what is taken away or divided by, so
+    // the − 3 and ÷ 7 families sit together in the chart.
+    const sub = r.groups[1].items.map(i => i.label);
+    assert.deepEqual(sub.slice(0, 3), ['2 − 1 = 1', '3 − 1 = 2', '4 − 1 = 3']);
+    const div = r.groups[3].items.map(i => Number(i.label.split(' ')[2]));
+    assert.deepEqual(div, [...div].sort((a, b) => a - b));
+    assert.ok(JSON.stringify(r).length < 30000, 'small enough for every session');
+});

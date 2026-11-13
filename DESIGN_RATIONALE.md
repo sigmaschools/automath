@@ -753,6 +753,16 @@ App version 1.15.0.
 
 **Tests**: `node --test` passes. Checked in Chromium with a stand-in Compass voice kit: in typing mode the answer box has no microphone and "Answer out loud" shows below it; tapping it starts the listener and the waveform with "Type instead"; "Type instead" stops the listener and brings typing back. No page errors.
 
+### Decision 32: Report Every Fact's Stage for the Fact Chart in Compass (13 November 2026)
+
+**Decision**: At the end of every visit, beside its `state` report, Automath puts a `mastery` report in the page: `{ kind: "mastery", title: "Math facts", subject: "math", groups: [...] }`, one group per operation (Addition, Subtraction, Multiplication, Division), each listing every fact as `{ label: "7 × 8 = 56", stage }`, with `stage` one of `unseen`, `learning`, `fluent`, `mastered` (the fact table's states). Addition and multiplication facts run by the smaller number; subtraction and division by the number taken away or divided by, so each fact family sits together. About 19 KB for all 477 facts.
+
+App version 1.18.0. (Numbered after Decisions 30 and 31, still open in pull requests #27 and #28 when this was written.)
+
+**Why**: the person running the project wants a chart guides and parents use to see which facts a student has mastered: one square per fact, like GitHub's contribution grid, empty for facts not yet seen and filling in toward green as facts are mastered, hover or tap showing the fact and its stage, grouped by operation. Automath runs only inside Compass and has no screen for adults, so the person chose (13 November) to draw the chart in Compass, on the week screen parents read and guides see as the Report tab, from a new general app report that any app can send (Spell's patterns could use it too). Compass never reads inside the `state` record, so Automath spells the stages out. Compass's side (accepting, keeping and drawing the report, app contract 1.12) is built in the Compass project; until it is live, Compass keeps the report and lists it under the session's report problems as an unknown kind, which changes nothing for the learner.
+
+**Tests**: `tests/facts.test.js` checks every fact appears once with the right stage, the four groups and their sizes, the family order and the size. Checked in Chromium: a multiplication visit ends with `part`, `state` and `mastery` reports, the last with 477 facts and the 10 facts just answered fast marked `fluent`. No page errors.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
