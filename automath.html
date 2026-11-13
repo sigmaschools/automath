@@ -322,13 +322,6 @@
             display: none;
         }
 
-        .part-left {
-            font-size: 18px;
-            color: #666666;
-            margin-top: 30px;
-            margin-bottom: 20px;
-        }
-
         .summary-table {
             margin-top: 30px;
         }
@@ -346,42 +339,6 @@
         .result-item.accuracy .result-label { color: #0f766e; }
         .result-item.time .result-label { color: #7c3aed; }
         .result-item .result-label { font-weight: 600; }
-
-        /* The one way forward between exercises: big, colored and right under
-           the title, so nobody has to hunt for it. */
-        #nextPartBtn {
-            display: block;
-            margin: 32px auto 8px auto;
-            background: #2563eb;
-            color: #ffffff;
-            font-size: 24px;
-            font-weight: 600;
-            padding: 22px 56px;
-            border-radius: 12px;
-            min-width: 280px;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
-        }
-
-        #nextPartBtn:hover {
-            background: #1d4ed8;
-            opacity: 1;
-        }
-
-        #nextPartBtn:disabled {
-            opacity: 0.6;
-            cursor: default;
-        }
-
-        #nextPartBtn:focus-visible {
-            outline: 3px solid #93c5fd;
-            outline-offset: 3px;
-        }
-
-        .next-hint {
-            font-size: 14px;
-            color: #737373;
-            margin-bottom: 10px;
-        }
 
         /* On-screen number pad for touch screens (Decision 18) */
         .keypad {
@@ -628,29 +585,6 @@
             </div>
 
             <div class="progress" id="progress"></div>
-        </div>
-
-        <!-- Between parts (only when Compass chose the operations) -->
-        <div id="partScreen" class="screen">
-            <h2 id="partDoneTitle">Done</h2>
-            <div class="results" id="partScore"></div>
-            <div class="mastery" id="partMastery"></div>
-            <button id="nextPartBtn">Next</button>
-            <div class="next-hint">or press Enter</div>
-            <div class="part-left" id="partLeft"></div>
-            <div class="review-section">
-                <div class="review-title">Review Your Work</div>
-                <table class="review-table">
-                    <thead>
-                        <tr>
-                            <th class="problem-col">Problem</th>
-                            <th>Your Answer</th>
-                            <th>Correct Answer</th>
-                        </tr>
-                    </thead>
-                    <tbody id="partReviewBody"></tbody>
-                </table>
-            </div>
         </div>
 
         <!-- Results Screen -->
@@ -1414,7 +1348,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.19.0';
+        const APP_VERSION = '1.20.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1472,6 +1406,7 @@
 
         let partIndex = 0;
         let runParts = [];      // one score per finished operation in this visit
+        let runHistory = [];    // grouped runs: every scored problem of every operation so far
         let mixedQueue = null;  // mixed runs: the operation of each problem, in order
         let opState = {};       // each operation's rules state (AutomathCore.newState) and counts
 
@@ -1523,10 +1458,6 @@
         const answerMark = document.getElementById('answerMark');
         const progressEl = document.getElementById('progress');
         const keypad = document.getElementById('keypad');
-
-        const partScreen = document.getElementById('partScreen');
-        const nextPartBtn = document.getElementById('nextPartBtn');
-        nextPartBtn.addEventListener('click', startNextPart);
 
         if (useKeypad) {
             document.body.classList.add('with-keypad');
@@ -2083,7 +2014,10 @@
             AutomathCore.recordShown(s.rules, problem, selectedOperation);
             currentIsRetry = false;
             displayProblem(problem);
-            progressEl.textContent = `${partLabel()}Problem ${currentProblem + 1} of ${problemsInRun()}`;
+            // Grouped runs count through every operation as one sequence.
+            const before = mixedQueue ? 0 : runParts.reduce((n, part) => n + part.total, 0);
+            const inAll = mixedQueue ? problemsInRun() : compassParts.reduce((n, op) => n + problemsFor(op), 0);
+            progressEl.textContent = `${partLabel()}Problem ${before + currentProblem + 1} of ${inAll}`;
         }
 
         // A missed problem, once more. It is not scored and does not move the
@@ -2214,7 +2148,7 @@
         }
 
         // One operation's 10 problems (and their retries) are done: tell
-        // Compass, then go on to the next listed operation or to the results.
+        // Compass, then go straight on to the next listed operation or to the results.
         function finishPart() {
             const seconds = exerciseSeconds();
             const total = problemsFor(selectedOperation);
@@ -2228,8 +2162,14 @@
                 history: sessionHistory
             });
             runParts.push({ operation: selectedOperation, correct: correctAnswers, total, seconds, outcome: settleRecord(selectedOperation, sessionHistory) });
+            runHistory = runHistory.concat(sessionHistory);
+            // Grouped runs go straight on to the next operation: one sequence,
+            // no screen to click through (Decision 30). The new color and name
+            // above the problem show the change.
             if (partIndex < compassParts.length - 1) {
-                showPartScreen();
+                partIndex++;
+                selectedOperation = compassParts[partIndex];
+                startPractice();
             } else {
                 showResults();
             }
@@ -2348,37 +2288,6 @@
                 appVersion: APP_VERSION
             };
             putReport(report);
-        }
-
-        function showPartScreen() {
-            practiceScreen.classList.remove('active');
-            partScreen.classList.add('active');
-            voiceSync();
-            const left = compassParts.slice(partIndex + 1).map(p => OPERATION_NAMES[p]);
-            const part = runParts[runParts.length - 1];
-            document.getElementById('partDoneTitle').textContent = `${OPERATION_NAMES[selectedOperation]} done ✓`;
-            renderScore(document.getElementById('partScore'), part.correct, part.total, part.seconds);
-            renderMastery(document.getElementById('partMastery'), [part]);
-            celebrateIfEarned(part.correct, part.total);
-            renderReview(document.getElementById('partReviewBody'), sessionHistory);
-            document.getElementById('partLeft').textContent = left.length === 1 ? 'One more to go' : `${left.length} more to go`;
-            nextPartBtn.textContent = `Next: ${left[0]} →`;
-            // A beat before the button takes Enter, so the Enter that answered the
-            // last problem cannot also skip this screen.
-            nextPartBtn.disabled = true;
-            setTimeout(() => {
-                nextPartBtn.disabled = false;
-                nextPartBtn.focus();
-            }, 600);
-        }
-
-        function startNextPart() {
-            if (partIndex >= compassParts.length - 1) return;
-            stopFireworks();
-            partIndex++;
-            selectedOperation = compassParts[partIndex];
-            partScreen.classList.remove('active');
-            startPractice();
         }
 
         function formatTime(elapsed) {
@@ -2500,7 +2409,7 @@
             // own problems, then a table of every exercise in this visit, one
             // score per operation.
             const part = runParts[runParts.length - 1];
-            renderMastery(document.getElementById('resultsMastery'), mixedQueue ? runParts : [part]);
+            renderMastery(document.getElementById('resultsMastery'), runParts.length > 1 ? runParts : [part]);
             if (mixedQueue) {
                 // One set, so one score for it, then one row per operation so a
                 // weak operation still shows.
@@ -2509,13 +2418,24 @@
                 celebrateIfEarned(correctAnswers, problemsInRun());
                 runParts.sort((a, b) => compassParts.indexOf(a.operation) - compassParts.indexOf(b.operation));
                 renderSummary(false);
+                renderReview(document.getElementById('reviewTableBody'), sessionHistory);
+            } else if (runParts.length > 1) {
+                // Grouped runs are one sequence too (Decision 30): one score for
+                // all of it, one row per operation, and every problem to review.
+                const correct = runParts.reduce((n, p) => n + p.correct, 0);
+                const total = runParts.reduce((n, p) => n + p.total, 0);
+                document.getElementById('resultsTitle').textContent = 'Practice done ✓';
+                renderScore(document.getElementById('resultsScore'), correct, total, runParts.reduce((n, p) => n + p.seconds, 0));
+                celebrateIfEarned(correct, total);
+                renderSummary(false);
+                renderReview(document.getElementById('reviewTableBody'), runHistory);
             } else {
                 document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
                 renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
                 celebrateIfEarned(part.correct, part.total);
                 renderSummary();
+                renderReview(document.getElementById('reviewTableBody'), sessionHistory);
             }
-            renderReview(document.getElementById('reviewTableBody'), sessionHistory);
         }
 
         // A short burst of fireworks over the score when accuracy is above 85%:

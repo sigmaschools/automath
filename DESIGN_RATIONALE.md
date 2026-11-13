@@ -753,6 +753,17 @@ App version 1.15.0.
 
 **Tests**: `node --test` passes. Checked in Chromium with a stand-in Compass voice kit: in typing mode the answer box has no microphone and "Answer out loud" shows below it; tapping it starts the listener and the waveform with "Type instead"; "Type instead" stops the listener and brings typing back. No page errors.
 
+### Decision 30: Grouped Days Run as One Sequence (12 November 2026)
+
+**Decision**: On a grouped day (Decision 16) the operations still come one block after another, 10 problems each, but there is no screen between them any more. When one operation's last problem (and its retries) is answered, the next operation's first problem follows at once, in its own color and with its name on the problem line. The line counts through the whole run, "Subtraction · Problem 11 of 40", as a mixed day does. The results screen at the end says "Practice done ✓" with one score, accuracy and time for the whole run, one row per operation, the mastery line for each operation, and every problem to review. Each operation's `part` and `state` reports still appear the moment it finishes, so stopping partway keeps what was done. The "Next: Subtraction →" button, its "or press Enter" hint and the "N more to go" line (Decisions 14 and 15) are gone. A run of one operation is unchanged.
+
+App version 1.19.0.
+
+**Why**: testing in Compass, the person running the project found the click-through between operations awkward and asked for all the questions to run in a single sequence. The pause broke the flow of a warm-up that is meant to be quick, and the per-operation score it showed is still on the results screen, one row per operation.
+
+**Alternatives considered**: a short automatic interstitial ("Next: Subtraction") with no button (still a pause, and the color and name change already mark the switch); interleaving the operations every day (that is the mixed day; the grouped day keeps each operation's practice concentrated).
+
+**Tests**: `node --test` passes. Checked in Chromium with `?compass_parts=addition,subtraction,multiplication,division&mode=grouped`: answering straight through goes from Addition problem 10 to Subtraction problem 11 of 40 with no screen between, four `part` reports appear one at a time, and the results screen shows "Practice done ✓", 40/40, four summary rows and 40 problems in the review. No page errors.
 ### Decision 31: A Heard Number Waits for Enter; Teen/Ty Mix-Ups Read as the Answer (12 November 2026)
 
 **Decision**: Two changes from a morning of voice testing with a child who mumbled and sang between answers and got angry when Automath took the mumbling as answers, and who was heard saying 13 as 30:
@@ -760,7 +771,7 @@ App version 1.15.0.
 - **Enter sends a spoken answer.** While "Answer out loud" is on, a heard number goes in the answer box and waits there, right or wrong, until the learner presses Enter: a large Enter button under the waveform (dimmed until a number is heard), or the Enter key on a keyboard. Saying another number replaces it, so mumbling and singing only change what the box shows. If more than one number is heard at once ("seven… eight"), the box shows the last. Once sent, the answer is marked like a typed one (Decisions 26 and 28: a wrong one shows red with a cross, then the right answer in green). This was the child's own idea: he wanted to check that the box showed the number he meant before it counted.
 - **Teen/ty mix-ups.** When the answer is 13 to 19 and its "-ty" partner is heard (30 to 90), or the other way round, the box shows the answer. Recognizers often confuse the two endings, and a child who knows 6 + 7 rarely answers "thirty". Only the answer's own partner is changed: 40 heard for 13, or 30 heard for 12, shows as heard. For addition and subtraction the kit already listens only up to the largest answer (18), so this matters mostly for multiplication and division.
 
-App version 1.19.0 (numbered after Decision 30, grouped days as one sequence, still open as #27, and merged after Decision 32, version 1.18.0).
+App version 1.20.0 (merged after Decision 30, version 1.19.0, and Decision 32, version 1.18.0).
 
 **What this changes**: Decision 26 marked a wrong spoken number as soon as the learner stopped talking, and a right one at once. Now neither is marked until Enter, which brings back a form of Compass app contract 1.5, section 15, rule 3 (hold a heard number for the learner to confirm), now for every number rather than only wrong ones. Decision 26's problem (a wrong number held, then the right one said, ending a set at 100%) is answered differently: the learner sees exactly what will be sent and sends it themselves, as when typing and correcting before Enter. Decision 25's Enter button comes back, always shown while voice is on. Voice is still only on or off (Decision 29).
 
