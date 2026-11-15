@@ -284,3 +284,16 @@ test('each answer carries a stable question id and skill for Compass (Decision 3
     }
     assert.equal(new Set(ids).size, 477, 'each fact once');
 });
+
+test("the day is Compass's when it sends one, the device's otherwise (Decision 34)", () => {
+    const device = F.localDay(new Date(2026, 10, 15, 23, 30)); // the device says 15 Nov
+    assert.equal(F.isoDay(device), '2026-11-15');
+    // Compass counts days in the school's time zone: its day wins.
+    assert.equal(F.isoDay(F.dayFrom('2026-11-16', device)), '2026-11-16');
+    assert.equal(F.dayFrom('2026-11-15', device), device);
+    assert.equal(F.dayFrom('2026-11-16', device), device + 1);
+    // Missing or not a real day: the device's day, as before.
+    for (const bad of [null, undefined, '', 'today', '2026-11-16T08:00:00Z', '2026-02-30', '2026-13-01', '16/11/2026', '20261116', ' 2026-11-16']) {
+        assert.equal(F.dayFrom(bad, device), device, String(bad));
+    }
+});

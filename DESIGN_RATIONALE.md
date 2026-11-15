@@ -807,6 +807,21 @@ Nothing else in the report changes, and nothing the learner sees changes. App ve
 
 **Tests**: `tests/facts.test.js` checks the spellings, that both orders of a fact that commutes give one id, and that all 477 facts have different ids within the contract's 100 characters. Checked in Chromium (`?compass_parts=multiplication,division&mode=mixed`): each of the 20 answers in the two `part` reports has its `id` and `skill` (`7 × 3` is `3x7`, `multiply:7`; `16 ÷ 2` is `16/2`, `divide:2`). No page errors.
 
+### Decision 34: Compass's Day, and No Finished Part for a Resting Operation (15 November 2026)
+
+**Decision**: Two fixes to how Automath and Compass agree about a day. Closes #15. App version 1.22.0.
+
+- **The day comes from Compass.** Automath takes the learner's day from the `compass_today` launch parameter (`YYYY-MM-DD`, the day as Compass counts it, in the school's time zone) and uses it for everything it schedules: review dates, graduation and check-ins, the `due` dates in the `state` report, and whether the day is mixed or grouped (Decision 16). When Compass sends no day, or one that is not a real date, the device's own day is used, as before.
+- **A resting operation is not reported as a part.** A graduated operation whose check-in is not due is still skipped, but Automath no longer writes a `part` report for it (the `rest: true` report of Decision 19, point 8). When Compass lists a resting operation, Automath writes a `state` report at the start instead, whose `due` date tells Compass the operation is not needed today. "Nothing due today ✓" still shows when every listed operation rests. A `part` report's `index` now counts among the operations asked in this visit, like `of`.
+
+**Why (the day)**: Decisions 16 and 19 used the device's date because nothing better was passed. Compass decides which operations it owes on its own day and compares Automath's `due` dates with it. Near midnight, or on a device set to another time zone, the two days differ, and Automath could treat as resting an operation Compass was asking for, or the reverse. One day, Compass's, removes the disagreement. On a device whose date matches the school's, which is the usual case, nothing changes.
+
+**Why (rest)**: Compass gives a finished part with no right or wrong answers its full rate, because a part without questions is still work done. A rest report was a finished part with nothing asked, so a resting operation earned 2 XP and a line in the work log for no work. XP is for completed work only. Compass already counts an operation as done for the day when its `due` date is later, so no report is needed for it.
+
+**Alternatives considered**: keeping the rest report with a status other than `finished` (the contract has no such status, and Compass needs nothing from it); comparing the device's day with Compass's and warning when they differ (nobody is there to read the warning; using Compass's day is the fix).
+
+**Tests**: `tests/facts.test.js` checks that Compass's day wins and that a missing or malformed one falls back to the device's. Checked in Chromium: with `compass_today=2026-11-17` on a device dated 15 November, the `state` report's `due` dates are 2026-11-17; with multiplication graduated and resting, `?compass_parts=multiplication,division` asks only Division, writes one `part` report (Division, `index` 1 of 1) and no report for multiplication, whose `due` date in the `state` report is its check-in day; with both resting the page shows "Nothing due today ✓" with a `state` and a `mastery` report and no `part` report. No page errors.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
