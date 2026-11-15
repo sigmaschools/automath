@@ -1104,7 +1104,8 @@
             const SCORE_DAYS = 365;      // a score older than this says little about today
 
             function gradeNumber(grade) {
-                const text = String(grade == null ? '' : grade).trim().toUpperCase();
+                if (typeof grade !== 'string' && typeof grade !== 'number') return null;
+                const text = String(grade).trim().toUpperCase();
                 if (text === 'K') return 0;
                 return /^\d{1,2}$/.test(text) ? Number(text) : null;
             }
@@ -1114,7 +1115,7 @@
                 const scores = Array.isArray(student.testScores) ? student.testScores : [];
                 let best = null;
                 scores.forEach(t => {
-                    if (!t || typeof t !== 'object' || String(t.subject).toLowerCase() !== 'math') return;
+                    if (!t || typeof t !== 'object' || typeof t.subject !== 'string' || t.subject.toLowerCase() !== 'math') return;
                     if (typeof t.percentile !== 'number' || !isFinite(t.percentile)) return;
                     const day = dayFrom(t.testDate, null);
                     if (day === null || day > today || today - day > SCORE_DAYS) return;
@@ -1438,8 +1439,11 @@
                     if (!middle) return null;
                     const b64 = middle.replace(/-/g, '+').replace(/_/g, '/');
                     const bytes = decode(b64 + '==='.slice((b64.length + 3) % 4));
-                    const text = decodeURIComponent(Array.from(bytes,
-                        c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+                    let text = bytes;
+                    try {
+                        text = decodeURIComponent(Array.from(bytes,
+                            c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+                    } catch (e) { /* not UTF-8: read it byte for byte, as before */ }
                     const claims = JSON.parse(text);
                     return claims && typeof claims === 'object' ? claims : null;
                 } catch (e) {
@@ -1492,8 +1496,14 @@
         const student = (() => {
             try { return AutomathSpeech.profileStudent(window.location.hash, (b) => atob(b)); } catch (e) { return null; }
         })();
-        const startLevels = AutomathFacts.startLevels(factMode ? null : student, today);
-        const studentName = AutomathFacts.firstName(student);
+        // Nothing in a profile may stop the page: anything unreadable means
+        // level 1 and no name, as without one.
+        const startLevels = (() => {
+            try { return AutomathFacts.startLevels(factMode ? null : student, today); } catch (e) { return AutomathFacts.startLevels(null, today); }
+        })();
+        const studentName = (() => {
+            try { return AutomathFacts.firstName(student); } catch (e) { return ''; }
+        })();
         // A results title with the learner's first name when Compass gave one.
         function titleFor(text) {
             return studentName ? `${text}, ${studentName} ✓` : `${text} ✓`;

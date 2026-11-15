@@ -307,6 +307,8 @@ test('a new learner starts each operation at a level their grade suggests, never
     for (const s of [null, undefined, {}, { grade: '' }, { grade: 'fifth' }, { grade: 5.5 }, { grade: '-2' }, 'x', []]) {
         assert.deepEqual(startLevels(s, DAY), all(1), JSON.stringify(s));
     }
+    // A grade that is not text or a number is not read at all.
+    for (const g of [[5], { toString: 1, valueOf: 1 }, true]) assert.deepEqual(startLevels({ grade: g }, DAY), all(1));
     assert.deepEqual(startLevels({ grade: 'K' }, DAY), all(1));
     assert.deepEqual(startLevels({ grade: '1' }, DAY), all(1));
     assert.deepEqual(startLevels({ grade: '2' }, DAY), { addition: 2, subtraction: 2, multiplication: 1, division: 1 });
@@ -347,6 +349,8 @@ test('a recent low outside math score starts a new learner one level lower; a hi
     assert.deepEqual(startLevels({ testScores: [math(5)] }, DAY), all(1));
     assert.deepEqual(startLevels({ grade: '5', testScores: 'none' }, DAY), all(3));
     assert.deepEqual(startLevels({ grade: '5', testScores: [null, 7, {}] }, DAY), all(3));
+    assert.deepEqual(start({ ...math(5), subject: { toString: 1, valueOf: 1 } }), all(3));
+    assert.deepEqual(start({ ...math(5), subject: ['math'] }), all(3));
 });
 
 test("the learner's first name, for the results screen (Decision 35)", () => {

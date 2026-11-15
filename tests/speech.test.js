@@ -66,4 +66,9 @@ test("reads the student from the profile note, or null without one (Decision 35)
         assert.equal(speech.profileStudent(hash, decode), null, hash);
     }
     assert.equal(speech.profileStudent(undefined, decode), null);
+    // A note that is not UTF-8 is still read byte for byte, as before this
+    // decision, so the voice kit's server is still found.
+    const latin = `${b64url({ alg: 'EdDSA' })}.${Buffer.from('{"iss":"https://compass.example","student":{"name":"Zo\xeb"}}', 'latin1').toString('base64url')}.c2ln`;
+    assert.equal(speech.profileIssuer(`#compass_profile=${latin}`, decode), 'https://compass.example');
+    assert.equal(speech.profileStudent(`#compass_profile=${latin}`, decode).name, 'Zo\u00eb');
 });
