@@ -52,3 +52,18 @@ test('reads the Compass server from the profile note after the #', () => {
     assert.equal(speech.profileIssuer('#compass_profile=a.!!!.b', decode), null);
     assert.equal(speech.profileIssuer(`#compass_profile=${note({ sub: 'x' })}`, decode), null);
 });
+
+test("reads the student from the profile note, or null without one (Decision 35)", () => {
+    const b64url = (o) => Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const decode = (b) => Buffer.from(b, 'base64').toString('binary'); // what atob gives a page
+    const note = (claims) => `${b64url({ alg: 'EdDSA' })}.${b64url(claims)}.c2ln`;
+    const student = { id: 'a1', name: 'Zoë Example', grade: '5', testScores: [{ subject: 'math', percentile: 61 }] };
+    assert.deepEqual(speech.profileStudent(`#compass_profile=${note({ iss: 'https://compass.example', student })}`, decode), student);
+    assert.deepEqual(speech.profileStudent(`#route&compass_profile=${note({ student })}`, decode), student);
+    for (const hash of ['', '#', '#compass_profile=', '#compass_profile=nonsense', '#compass_profile=a.!!!.b',
+        `#compass_profile=${note({ iss: 'x' })}`, `#compass_profile=${note({ student: 'Avery' })}`,
+        `#compass_profile=${note({ student: ['Avery'] })}`, `#compass_profile=${note({ student: null })}`]) {
+        assert.equal(speech.profileStudent(hash, decode), null, hash);
+    }
+    assert.equal(speech.profileStudent(undefined, decode), null);
+});
