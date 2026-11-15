@@ -1292,7 +1292,21 @@
                 return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
             }
 
+            // The learner's day as Compass counts it (`compass_today`,
+            // YYYY-MM-DD, in the school's time zone), as a day number
+            // (Decision 34). Compass owes parts and compares `due` dates on
+            // that day, so the record must be kept on it too. Without it, or
+            // if it is not a real day, the device's own day is used.
+            function dayFrom(text, deviceDay) {
+                if (typeof text !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return deviceDay;
+                const ms = Date.parse(`${text}T00:00:00Z`);
+                if (isNaN(ms)) return deviceDay;
+                const day = Math.floor(ms / 86400000);
+                return isoDay(day) === text ? day : deviceDay;
+            }
+
             return {
+                dayFrom,
                 OPS, UNSEEN, LEARNING, FLUENT, MASTERED, INTERVALS, CHECKIN_DAYS, SESSION, CHECKIN, TABLE,
                 create, encode, decode, fluentLimit, isFluent, recordAnswer, counts, masteryReport,
                 questionId, questionSkill,
@@ -1367,7 +1381,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.21.0';
+        const APP_VERSION = '1.22.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1386,7 +1400,10 @@
         // chosen fact by fact. Without one (the first day, or a Compass that
         // does not keep it yet), the level staircase chooses them as before and
         // its answers start a new record.
-        const today = AutomathFacts.localDay();
+        // The day is the one Compass counts (`compass_today`), so the record's
+        // due dates and the parts Compass owes agree; the device's own day
+        // only when Compass sends none (Decision 34).
+        const today = AutomathFacts.dayFrom(urlParams.get('compass_today'), AutomathFacts.localDay());
         const savedRecord = AutomathFacts.decode(urlParams.get('compass_state'));
         const record = savedRecord || AutomathFacts.create(today);
         const factMode = !!savedRecord;
@@ -1409,9 +1426,7 @@
             if (compassParts.length < 2) return 'grouped';
             const forced = urlParams.get('mode');
             if (forced === 'mixed' || forced === 'grouped') return forced;
-            const now = new Date();
-            const localDay = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
-            return localDay % 2 === 0 ? 'mixed' : 'grouped';
+            return today % 2 === 0 ? 'mixed' : 'grouped';
         })();
         // A number pad on the page for touch screens, so the device keyboard does
         // not cover the problem and typing time does not count as recall time.
@@ -2173,7 +2188,7 @@
             const total = problemsFor(selectedOperation);
             reportPart({
                 part: selectedOperation,
-                index: listedParts.indexOf(selectedOperation) + 1,
+                index: compassParts.indexOf(selectedOperation) + 1,
                 total,
                 correct: correctAnswers,
                 fluent: opState[selectedOperation].fluent,
@@ -2204,7 +2219,7 @@
             const history = sessionHistory.filter(item => item.operation === op);
             reportPart({
                 part: op,
-                index: listedParts.indexOf(op) + 1,
+                index: compassParts.indexOf(op) + 1,
                 total,
                 correct: s.correct,
                 fluent: s.fluent,
@@ -2258,25 +2273,6 @@
             // Every fact's stage, for the fact chart guides and parents read
             // in Compass (Decision 32).
             putReport({ ...AutomathFacts.masteryReport(record), appVersion: APP_VERSION });
-        }
-
-        // A graduated operation with no check-in due: done today, nothing to ask.
-        function reportRest(op) {
-            putReport({
-                kind: 'part',
-                part: op,
-                index: listedParts.indexOf(op) + 1,
-                of: listedParts.length,
-                mode: runMode,
-                status: 'finished',
-                rest: true,
-                correct: 0,
-                wrong: 0,
-                fluent: 0,
-                seconds: 0,
-                items: [],
-                appVersion: APP_VERSION
-            });
         }
 
         function reportPart(part) {
@@ -2570,8 +2566,11 @@
         }
 
         // Start the first operation Compass listed (or all four, opened on its
-        // own). Graduated operations with no check-in due are reported done first.
-        restingParts.forEach(reportRest);
+        // own). A graduated operation with no check-in due is not asked and is
+        // not reported as a part: a finished part with nothing asked would
+        // earn XP for no work (Decision 34). The `state` report's `due` dates
+        // tell Compass it is not needed today.
+        if (restingParts.length > 0) reportState();
         if (compassParts.length === 0) {
             showNothingDue();
         } else if (runMode === 'mixed') {
