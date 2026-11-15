@@ -822,6 +822,41 @@ Nothing else in the report changes, and nothing the learner sees changes. App ve
 
 **Tests**: `tests/facts.test.js` checks that Compass's day wins and that a missing or malformed one falls back to the device's. Checked in Chromium: with `compass_today=2026-11-17` on a device dated 15 November, the `state` report's `due` dates are 2026-11-17; with multiplication graduated and resting, `?compass_parts=multiplication,division` asks only Division, writes one `part` report (Division, `index` 1 of 1) and no report for multiplication, whose `due` date in the `state` report is its check-in day; with both resting the page shows "Nothing due today ✓" with a `state` and a `mastery` report and no `part` report. No page errors.
 
+### Decision 35: A New Learner Starts Where Their Grade Suggests, and Sees Their Name (15 November 2026)
+
+**Decision**: Automath reads who the student is from the profile note Compass passes at launch (after the `#`, app contract 1.4, section 1.1) and uses two things from it. Closes #18. App version 1.23.0.
+
+1. **Where a new learner starts.** A learner with no fact record yet (their first day) starts each operation's level staircase at a level their grade suggests, instead of at level 1:
+
+   | Grade | Addition and subtraction | Multiplication and division |
+   |-------|--------------------------|-----------------------------|
+   | K, 1 | level 1 | level 1 |
+   | 2 | level 2 | level 1 |
+   | 3 | level 3 | level 1 |
+   | 4 | level 3 | level 2 |
+   | 5 and up | level 3 | level 3 |
+
+   If the profile has an outside math score (such as MAP) from the last 365 days with a percentile below 25, every start is one level lower, never below 1. The newest such score counts. A high score never raises the start. Nobody starts at level 4.
+
+2. **The learner's name.** The results screen's heading carries the learner's first name: "Practice done, Avery ✓" (and "Nothing due today, Avery ✓"). Nothing is added before or during practice.
+
+**What it does not change.** A learner who already has a record is placed by the record alone, exactly as before; this includes every learner who has used Automath in Compass. Without a readable profile (opened outside Compass, an older shell, a note that expired, a grade Compass does not know) every operation starts at level 1 and the headings have no name, exactly as before. The profile is read in the page and goes nowhere else.
+
+**Why (placement)**: a grade 5 student's first minutes were 2 + 1 and 2 × 1, which tells them the app is not for them and tells the record nothing useful. Starting nearer the right level makes the first day's ten problems per operation informative. It is deliberately only a starting point:
+
+- **Mastery is still shown, never claimed** (principle 6). No fact is credited from a grade or a test score. The record still starts empty and every fact must be answered fast on separate days to be mastered (Decision 19).
+- **A wrong placement corrects itself in one answer.** A miss drops a level at once, and climbing back into that level takes 3 fluent answers (Decision 17).
+- **The start is one step behind the usual school sequence**, so it errs low: sums within 10 are expected by the end of grade 1 and within 20 by the end of grade 2, and the times tables through grades 3 and 4, so a learner starts on the facts expected a year or more earlier. Level 4 (the facts crossing ten, the 11 and 12 tables) is two fluent answers away for a learner who is ready.
+- **The test score only lowers the start.** MAP measures general math, not fact recall, so it is weak evidence that a learner is fluent and reasonable evidence that they may not be. Grade places; a low score makes the start gentler.
+
+**Why (the name)**: Compass passes the name so an app can feel like it knows the learner. The practice screen is kept free of anything that pulls the eye from the problem (Lesson 1, Decision 15), and a greeting beside the first problem would add reading time to an answer whose speed is measured. The results screen is where the learner pauses, so the name goes there. "Done" stays a statement of fact, since praise that is not earned backfires (principle 17).
+
+**What this does not do yet**: placement only moves the first day. From the second day the record chooses the problems and still introduces new facts from the easiest tier up, so an older learner spends some days confirming easy facts (each takes one fast answer). Letting the record introduce harder tiers first for a placed learner would need the placement stored in the record, a new record format, and is left for later. Each placed operation's `part` report carries `startLevel`, so Compass data can show whether placed learners miss more on their first day.
+
+**Alternatives considered**: marking easy facts as known from the grade (claims mastery nobody has shown); raising the start for a high test score (the staircase gets there in two answers if the learner is ready); using the MAP score's own scale against published norms (norm tables change and would be copied into the app; the percentile already compares the learner with their grade); placing by the math level the course app reports (possible later; grade is always there); a greeting screen before practice (one more step before the first problem, against Decision 2).
+
+**Tests**: `tests/facts.test.js` checks the table above for every grade, that the start is never level 4 and never below 1, which test scores count (math, with a percentile, from the last year, the newest), that a learner with nothing known starts at level 1, the first name, and that a staircase started at level 3 drops on a miss and needs 3 to climb back. `tests/speech.test.js` checks reading the student from the note, a name with an accent, and damaged or missing notes. Checked in Chromium with stand-in notes: grade 5 with no record starts Addition at level 3 (first problem 7 + 7) and both `part` reports have `startLevel: 3`; grade 5 with a math percentile of 10 starts at level 2; the same learner with a record starts from the record, with no `startLevel`; no note or a damaged note starts at level 1 with "Practice done ✓"; with a name the heading reads "Practice done, Zoë ✓". No page errors.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard

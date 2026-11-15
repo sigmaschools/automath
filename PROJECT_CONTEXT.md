@@ -351,6 +351,7 @@ Managed via CSS classes (no routing library):
 - ✅ A heard number waits in the box until the learner presses Enter (button under the waveform or keyboard); saying another number replaces it; a teen/ty mix-up of the answer (30 heard for 13) shows the answer (Decision 31)
 - ✅ Each visit also sends a `mastery` report listing every fact and its stage (unseen, learning, fluent, mastered), by operation, for the fact chart Compass draws for guides and parents (Decision 32)
 - ✅ The day is the one Compass sends (`compass_today`), the device's only without it; a resting operation is not reported as a finished part (Decision 34)
+- ✅ A learner with no record starts each operation at a level their grade suggests (one lower with a recent low outside math score), and the results heading carries their first name, both from the Compass profile note (Decision 35)
 - ✅ Each answer in a `part` report names its fact (`id`, like `7x8`) and its skill (`skill`, like `multiply:8`), app contract 1.7 (Decision 33)
 
 ### Known Limitations 🔄
@@ -482,6 +483,7 @@ Managed via CSS classes (no routing library):
 - [ ] A record with an operation graduated and its check-in in the future: that operation is not asked and gets no `part` report (Decision 34); a `state` report at the start carries its `due` date; with its check-in due: 10 problems, progress line "<Operation> check-in · Problem N of 10", report `check: true`
 - [ ] Every listed operation resting: "Nothing due today ✓", a `state` and a `mastery` report and no `part` report
 - [ ] `&compass_today=2026-11-17`: the `state` report's `due` dates for daily operations are 2026-11-17 whatever the device's date; a missing or malformed `compass_today` uses the device's day
+- [ ] With a profile note after the `#` (grade 5, no `compass_state`): every operation starts at level 3 and its `part` report has `startLevel: 3`; with `compass_state` the record chooses and there is no `startLevel`; the results heading ends ", <first name> ✓"; with no note or a damaged one, level 1 and no name
 - [ ] A damaged `compass_state` is ignored (the level staircase runs, as on a first day)
 
 ---

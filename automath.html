@@ -725,10 +725,11 @@
                 return list;
             }
 
-            // One operation's practice state within an exercise.
-            function newState() {
+            // One operation's practice state within an exercise. A learner
+            // with no record yet may start above level 1 (Decision 35).
+            function newState(level = 1) {
                 return {
-                    level: 1,
+                    level: [1, 2, 3, 4].includes(level) ? level : 1,
                     streak: 0,          // fluent correct answers in a row
                     droppedFrom: [],    // levels slipped out of this exercise
                     seen: new Set(),    // normalized problems already shown
@@ -1086,6 +1087,62 @@
                 return { kind: 'mastery', title: 'Math facts', subject: 'math', groups };
             }
 
+            // ---- Where a new learner starts (Decision 35) ----
+            // A learner with no record yet starts each operation's level
+            // staircase where their grade suggests, from the student profile
+            // Compass passes at launch, instead of at level 1. It is only
+            // where the first day's problems begin: no fact is credited
+            // without being asked, a miss still drops a level at once, and the
+            // top level is always earned. The start is one step behind the
+            // usual school sequence (sums within 10 by the end of grade 1 and
+            // within 20 by grade 2; the times tables through grade 3 and 4).
+            const START_GRADES = {
+                addition: [2, 3], subtraction: [2, 3],          // level 2 from grade 2, level 3 from grade 3
+                multiplication: [4, 5], division: [4, 5]        // level 2 from grade 4, level 3 from grade 5
+            };
+            const LOW_PERCENTILE = 25;   // a math score below this starts one level lower
+            const SCORE_DAYS = 365;      // a score older than this says little about today
+
+            function gradeNumber(grade) {
+                if (typeof grade !== 'string' && typeof grade !== 'number') return null;
+                const text = String(grade).trim().toUpperCase();
+                if (text === 'K') return 0;
+                return /^\d{1,2}$/.test(text) ? Number(text) : null;
+            }
+
+            // The newest outside math score with a percentile, from the last year.
+            function recentMathPercentile(student, today) {
+                const scores = Array.isArray(student.testScores) ? student.testScores : [];
+                let best = null;
+                scores.forEach(t => {
+                    if (!t || typeof t !== 'object' || typeof t.subject !== 'string' || t.subject.toLowerCase() !== 'math') return;
+                    if (typeof t.percentile !== 'number' || !isFinite(t.percentile)) return;
+                    const day = dayFrom(t.testDate, null);
+                    if (day === null || day > today || today - day > SCORE_DAYS) return;
+                    if (best === null || day > best.day) best = { day, percentile: t.percentile };
+                });
+                return best === null ? null : best.percentile;
+            }
+
+            function startLevels(student, today) {
+                const levels = {};
+                const known = student && typeof student === 'object' && !Array.isArray(student);
+                const grade = known ? gradeNumber(student.grade) : null;
+                const percentile = grade === null ? null : recentMathPercentile(student, today);
+                const lower = percentile !== null && percentile < LOW_PERCENTILE ? 1 : 0;
+                OPS.forEach(op => {
+                    const byGrade = grade === null ? 1 : 1 + START_GRADES[op].filter(g => grade >= g).length;
+                    levels[op] = Math.max(1, byGrade - lower);
+                });
+                return levels;
+            }
+
+            // The learner's first name, for the results screen; '' when unknown.
+            function firstName(student) {
+                const name = student && typeof student.name === 'string' ? student.name.trim() : '';
+                return name.split(/\s+/)[0].slice(0, 24);
+            }
+
             // ---- Question ids and skills for Compass (Decision 33) ----
             // Each answer in a `part` report names its fact (`id`) and what it
             // practises (`skill`), app contract 1.7 section 2.5. 7 × 8 and
@@ -1309,7 +1366,7 @@
                 dayFrom,
                 OPS, UNSEEN, LEARNING, FLUENT, MASTERED, INTERVALS, CHECKIN_DAYS, SESSION, CHECKIN, TABLE,
                 create, encode, decode, fluentLimit, isFluent, recordAnswer, counts, masteryReport,
-                questionId, questionSkill,
+                questionId, questionSkill, startLevels, firstName,
                 planSession, planCheckin, isGraduated, todayKind, ready, finishPart, dueDays, isoDay, localDay
             };
         })();
@@ -1356,20 +1413,45 @@
             // Read, not checked: the page only uses it to choose among servers
             // it already lists. Null without a readable note.
             function profileIssuer(hash, decode) {
+                const claims = profileClaims(hash, decode);
+                return claims && typeof claims.iss === 'string' ? claims.iss : null;
+            }
+
+            // Who the student is (the note's `student`: name, grade, outside
+            // test scores), or null without a readable note: opened outside
+            // Compass, an older shell, or a note that expired. Read, not
+            // checked, like the server above: the page only uses it to choose
+            // where a new learner starts and to show their name (Decision 35).
+            function profileStudent(hash, decode) {
+                const claims = profileClaims(hash, decode);
+                const student = claims && claims.student;
+                return student && typeof student === 'object' && !Array.isArray(student) ? student : null;
+            }
+
+            // The claims in the profile note after the `#`, or null. `decode`
+            // is atob in a page, which gives one character per byte, so the
+            // text is read as UTF-8 here (a name such as Zoë).
+            function profileClaims(hash, decode) {
                 try {
                     const token = new URLSearchParams(String(hash || '').replace(/^#/, '')
                         .replace(/^.*?(?=compass_profile=)/, '')).get('compass_profile');
                     const middle = token && token.split('.')[1];
                     if (!middle) return null;
                     const b64 = middle.replace(/-/g, '+').replace(/_/g, '/');
-                    const claims = JSON.parse(decode(b64 + '==='.slice((b64.length + 3) % 4)));
-                    return claims && typeof claims.iss === 'string' ? claims.iss : null;
+                    const bytes = decode(b64 + '==='.slice((b64.length + 3) % 4));
+                    let text = bytes;
+                    try {
+                        text = decodeURIComponent(Array.from(bytes,
+                            c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+                    } catch (e) { /* not UTF-8: read it byte for byte, as before */ }
+                    const claims = JSON.parse(text);
+                    return claims && typeof claims === 'object' ? claims : null;
                 } catch (e) {
                     return null;
                 }
             }
 
-            return { pick, teenTy, heardNote, profileIssuer };
+            return { pick, teenTy, heardNote, profileIssuer, profileStudent };
         })();
     </script>
     <script>
@@ -1381,7 +1463,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.22.0';
+        const APP_VERSION = '1.23.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -1407,6 +1489,25 @@
         const savedRecord = AutomathFacts.decode(urlParams.get('compass_state'));
         const record = savedRecord || AutomathFacts.create(today);
         const factMode = !!savedRecord;
+        // Who the student is, from the profile note Compass puts after the
+        // `#` (app contract 1.4, section 1.1), or null. A learner with no
+        // record yet starts each operation where their grade suggests; one
+        // with a record is placed by the record alone (Decision 35).
+        const student = (() => {
+            try { return AutomathSpeech.profileStudent(window.location.hash, (b) => atob(b)); } catch (e) { return null; }
+        })();
+        // Nothing in a profile may stop the page: anything unreadable means
+        // level 1 and no name, as without one.
+        const startLevels = (() => {
+            try { return AutomathFacts.startLevels(factMode ? null : student, today); } catch (e) { return AutomathFacts.startLevels(null, today); }
+        })();
+        const studentName = (() => {
+            try { return AutomathFacts.firstName(student); } catch (e) { return ''; }
+        })();
+        // A results title with the learner's first name when Compass gave one.
+        function titleFor(text) {
+            return studentName ? `${text}, ${studentName} ✓` : `${text} ✓`;
+        }
         // What each listed operation does today: 'practice', 'checkin' (a
         // graduated operation whose check-in is due) or 'rest' (graduated, next
         // check-in not due yet: reported done at once, nothing asked).
@@ -1994,7 +2095,7 @@
 
         function startPractice() {
             mixedQueue = null;
-            opState = { [selectedOperation]: { rules: AutomathCore.newState(), plan: planFor(selectedOperation), ...newCounts() } };
+            opState = { [selectedOperation]: { rules: AutomathCore.newState(startLevels[selectedOperation]), plan: planFor(selectedOperation), ...newCounts() } };
             beginExercise();
         }
 
@@ -2005,7 +2106,7 @@
             opState = {};
             const counts = {};
             compassParts.forEach(op => {
-                opState[op] = { rules: AutomathCore.newState(), plan: planFor(op), ...newCounts() };
+                opState[op] = { rules: AutomathCore.newState(startLevels[op]), plan: planFor(op), ...newCounts() };
                 counts[op] = problemsFor(op);
             });
             mixedQueue = AutomathCore.buildMixedQueue(compassParts, counts);
@@ -2284,6 +2385,7 @@
                 mode: runMode,
                 status: 'finished',
                 check: partKinds[part.part] === 'checkin' || undefined,
+                startLevel: startLevels[part.part] > 1 ? startLevels[part.part] : undefined,
                 correct: part.correct,
                 wrong: part.total - part.correct,
                 fluent: part.fluent,
@@ -2411,7 +2513,7 @@
         // Every listed operation is graduated and none has a check-in due.
         function showNothingDue() {
             resultsScreen.classList.add('active');
-            document.getElementById('resultsTitle').textContent = 'Nothing due today ✓';
+            document.getElementById('resultsTitle').textContent = titleFor('Nothing due today');
             document.getElementById('resultsScore').innerHTML = '';
             document.getElementById('resultsMastery').textContent = 'Your facts are fluent. See you at your next check-in.';
             document.getElementById('reviewTable').closest('.review-section').classList.add('hidden');
@@ -2430,7 +2532,7 @@
             if (mixedQueue) {
                 // One set, so one score for it, then one row per operation so a
                 // weak operation still shows.
-                document.getElementById('resultsTitle').textContent = 'Mixed practice done ✓';
+                document.getElementById('resultsTitle').textContent = titleFor('Mixed practice done');
                 renderScore(document.getElementById('resultsScore'), correctAnswers, problemsInRun(), exerciseSeconds());
                 celebrateIfEarned(correctAnswers, problemsInRun());
                 runParts.sort((a, b) => compassParts.indexOf(a.operation) - compassParts.indexOf(b.operation));
@@ -2441,13 +2543,13 @@
                 // all of it, one row per operation, and every problem to review.
                 const correct = runParts.reduce((n, p) => n + p.correct, 0);
                 const total = runParts.reduce((n, p) => n + p.total, 0);
-                document.getElementById('resultsTitle').textContent = 'Practice done ✓';
+                document.getElementById('resultsTitle').textContent = titleFor('Practice done');
                 renderScore(document.getElementById('resultsScore'), correct, total, runParts.reduce((n, p) => n + p.seconds, 0));
                 celebrateIfEarned(correct, total);
                 renderSummary(false);
                 renderReview(document.getElementById('reviewTableBody'), runHistory);
             } else {
-                document.getElementById('resultsTitle').textContent = `${OPERATION_NAMES[part.operation]} done ✓`;
+                document.getElementById('resultsTitle').textContent = titleFor(`${OPERATION_NAMES[part.operation]} done`);
                 renderScore(document.getElementById('resultsScore'), part.correct, part.total, part.seconds);
                 celebrateIfEarned(part.correct, part.total);
                 renderSummary();

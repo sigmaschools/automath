@@ -297,3 +297,82 @@ test("the day is Compass's when it sends one, the device's otherwise (Decision 3
         assert.equal(F.dayFrom(bad, device), device, String(bad));
     }
 });
+
+// As Compass or the page would read it (the rules run in their own realm).
+const startLevels = (student, today) => JSON.parse(JSON.stringify(F.startLevels(student, today)));
+
+test('a new learner starts each operation at a level their grade suggests, never the top one (Decision 35)', () => {
+    const all = n => ({ addition: n, subtraction: n, multiplication: n, division: n });
+    // Nothing known about the learner: level 1, as before.
+    for (const s of [null, undefined, {}, { grade: '' }, { grade: 'fifth' }, { grade: 5.5 }, { grade: '-2' }, 'x', []]) {
+        assert.deepEqual(startLevels(s, DAY), all(1), JSON.stringify(s));
+    }
+    // A grade that is not text or a number is not read at all.
+    for (const g of [[5], { toString: 1, valueOf: 1 }, true]) assert.deepEqual(startLevels({ grade: g }, DAY), all(1));
+    assert.deepEqual(startLevels({ grade: 'K' }, DAY), all(1));
+    assert.deepEqual(startLevels({ grade: '1' }, DAY), all(1));
+    assert.deepEqual(startLevels({ grade: '2' }, DAY), { addition: 2, subtraction: 2, multiplication: 1, division: 1 });
+    assert.deepEqual(startLevels({ grade: '3' }, DAY), { addition: 3, subtraction: 3, multiplication: 1, division: 1 });
+    assert.deepEqual(startLevels({ grade: '4' }, DAY), { addition: 3, subtraction: 3, multiplication: 2, division: 2 });
+    assert.deepEqual(startLevels({ grade: '5' }, DAY), all(3));
+    assert.deepEqual(startLevels({ grade: ' 5 ' }, DAY), all(3));
+    assert.deepEqual(startLevels({ grade: 5 }, DAY), all(3));
+    assert.deepEqual(startLevels({ grade: '12' }, DAY), all(3));
+    for (let g = 0; g <= 12; g++) {
+        for (const l of Object.values(startLevels({ grade: String(g) }, DAY))) assert.ok(l >= 1 && l <= 3);
+    }
+});
+
+test('a recent low outside math score starts a new learner one level lower; a high one never raises it (Decision 35)', () => {
+    const all = n => ({ addition: n, subtraction: n, multiplication: n, division: n });
+    const math = (percentile, daysAgo = 30, extra = {}) =>
+        ({ source: 'map_growth', subject: 'math', score: 200, percentile, testDate: F.isoDay(DAY - daysAgo), ...extra });
+    const start = (...scores) => startLevels({ grade: '5', testScores: scores }, DAY);
+    assert.deepEqual(start(math(24)), all(2));
+    assert.deepEqual(start(math(25)), all(3));
+    assert.deepEqual(start(math(99)), all(3));
+    // Never below level 1.
+    assert.deepEqual(startLevels({ grade: '2', testScores: [math(10)] }, DAY), all(1));
+    // Only math, only with a percentile, only from the last year, never from the future.
+    assert.deepEqual(start({ ...math(5), subject: 'reading' }), all(3));
+    assert.deepEqual(start({ ...math(5), percentile: undefined }), all(3));
+    assert.deepEqual(start({ ...math(5), percentile: '5' }), all(3));
+    assert.deepEqual(start(math(5, 366)), all(3));
+    assert.deepEqual(start(math(5, 365)), all(2));
+    assert.deepEqual(start(math(5, -1)), all(3));
+    assert.deepEqual(start({ ...math(5), testDate: 'last spring' }), all(3));
+    // The newest math score is the one that counts, whatever the order.
+    assert.deepEqual(start(math(60, 20), math(5, 200)), all(3));
+    assert.deepEqual(start(math(5, 200), math(60, 20)), all(3));
+    assert.deepEqual(start(math(5, 20), math(60, 200)), all(2));
+    // A score without a grade places nobody, and a damaged list is ignored.
+    assert.deepEqual(startLevels({ testScores: [math(5)] }, DAY), all(1));
+    assert.deepEqual(startLevels({ grade: '5', testScores: 'none' }, DAY), all(3));
+    assert.deepEqual(startLevels({ grade: '5', testScores: [null, 7, {}] }, DAY), all(3));
+    assert.deepEqual(start({ ...math(5), subject: { toString: 1, valueOf: 1 } }), all(3));
+    assert.deepEqual(start({ ...math(5), subject: ['math'] }), all(3));
+});
+
+test("the learner's first name, for the results screen (Decision 35)", () => {
+    assert.equal(F.firstName({ name: 'Avery Example' }), 'Avery');
+    assert.equal(F.firstName({ name: '  Zoë  ' }), 'Zoë');
+    assert.equal(F.firstName({ name: 'A'.repeat(60) }), 'A'.repeat(24));
+    for (const s of [null, undefined, {}, { name: '' }, { name: '   ' }, { name: 42 }, { name: null }]) {
+        assert.equal(F.firstName(s), '');
+    }
+});
+
+test('the staircase can start above level 1 and still drops on a miss (Decision 35)', () => {
+    assert.equal(core.newState().level, 1);
+    assert.equal(core.newState(3).level, 3);
+    for (const bad of [0, -1, 5, 2.5, '3', null, NaN]) assert.equal(core.newState(bad).level, 1, String(bad));
+    const s = core.newState(3);
+    core.recordAnswer(s, false, false);
+    assert.equal(s.level, 2);
+    // Climbing back into the level slipped out of takes 3 fluent answers, not 2.
+    core.recordAnswer(s, true, true);
+    core.recordAnswer(s, true, true);
+    assert.equal(s.level, 2);
+    core.recordAnswer(s, true, true);
+    assert.equal(s.level, 3);
+});
