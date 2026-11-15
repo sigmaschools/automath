@@ -350,6 +350,7 @@ Managed via CSS classes (no routing library):
 - ✅ Voice is either on or off: the one-answer microphone in the answer box is gone, so "Answer out loud" and "Type instead" are the only switches (Decision 29)
 - ✅ A heard number waits in the box until the learner presses Enter (button under the waveform or keyboard); saying another number replaces it; a teen/ty mix-up of the answer (30 heard for 13) shows the answer (Decision 31)
 - ✅ Each visit also sends a `mastery` report listing every fact and its stage (unseen, learning, fluent, mastered), by operation, for the fact chart Compass draws for guides and parents (Decision 32)
+- ✅ Each answer in a `part` report names its fact (`id`, like `7x8`) and its skill (`skill`, like `multiply:8`), app contract 1.7 (Decision 33)
 
 ### Known Limitations 🔄
 - Progress across sessions is kept by Compass (the `state` report, passed back as `compass_state`, app contract 0.4); a page opened without it starts a fresh record
@@ -475,6 +476,7 @@ Managed via CSS classes (no routing library):
 - [ ] Compass run of 2+ operations, mixed (`&mode=mixed` or an even local day): one set of 10 × the operations, progress line "Mixed · Problem N of 40" with all four, never the same operation twice in a row, no screen between operations; each operation reported (`mode: "mixed"`, its own 10 items, `seconds` = sum of its response times) the moment its 10th problem is answered; results screen "Mixed practice done ✓" with the set's score, one row per operation in `compass_parts` order and every problem below
 - [ ] One operation in `compass_parts` always runs grouped
 - [ ] Every Compass run leaves a `kind: "state"` report after each finished operation, with `data`, `due` (an ISO date per operation), `summary` and `fluentMs`
+- [ ] Every item in a `part` report has `id` (`7x8`, `4+9`, `13-6`, `56/8`; smaller number first for + and ×) and `skill` (`multiply:8`, `add:9`, `subtract:6`, `divide:8`)
 - [ ] Passing that `data` back as `compass_state` gives fact-chosen sets: the weakest facts come back 2 or 3 times, never within 3 problems of themselves; the results screen shows "<Operation> facts mastered: N of M"
 - [ ] A record with an operation graduated and its check-in in the future: that operation is reported at once with `rest: true` and not asked; with its check-in due: 10 problems, progress line "<Operation> check-in · Problem N of 10", report `check: true`
 - [ ] Every listed operation resting: "Nothing due today ✓", one `rest` report per operation

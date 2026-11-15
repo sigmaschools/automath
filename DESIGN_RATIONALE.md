@@ -790,6 +790,23 @@ App version 1.18.0. (Numbered after Decisions 30 and 31, still open in pull requ
 
 **Tests**: `tests/facts.test.js` checks every fact appears once with the right stage, the four groups and their sizes, the family order and the size. Checked in Chromium: a multiplication visit ends with `part`, `state` and `mastery` reports, the last with 477 facts and the 10 facts just answered fast marked `fluent`. No page errors.
 
+### Decision 33: Each Answer Names Its Fact and Its Skill (15 November 2026)
+
+**Decision**: Every answer in a `part` report carries two more fields, as Compass app contract 1.7 (section 2.5) asks:
+
+- `id`, the fact itself, the same for every learner and every time it is asked: `7x8`, `4+9`, `13-6`, `56/8`. Addition and multiplication facts are written smaller number first, because Automath treats 7 × 8 and 8 × 7 as one fact (Decision 19), so both are `7x8`. The signs are plain keyboard characters (`+ - x /`).
+- `skill`, the operation and its table: `add:9`, `subtract:6`, `multiply:8`, `divide:8`. For addition and multiplication the table is the larger number (7 × 8 is in `multiply:8`); for subtraction and division it is the number taken away or divided by, the families the fact chart already uses (Decision 32).
+
+Nothing else in the report changes, and nothing the learner sees changes. App version 1.21.0. Closes #26.
+
+**Why**: Compass keeps each answer as a row of the learner's learning evidence. With an id and a skill it can show which facts and tables a learner has and has not mastered, which facts are hard for every learner, and whether a new version of Automath teaches better than the last. Without them only the problem's text tells one question from another, and 7 × 8 and 8 × 7 look like two questions.
+
+**Never respell one.** Compass keeps these with every answer, so a renamed id or skill is a new fact or a new skill to anyone reading the record later. `tests/facts.test.js` pins the spellings.
+
+**Alternatives considered**: the fact table's own key (`7,8,×`) as the id (an internal spelling with a sign that is awkward to type and search for); the smaller number as the table for multiplication (7 × 8 in `multiply:7`, matching the fact chart's order; the larger number is how the tables are usually named and is the contract's own example, and either is only a grouping); one skill per operation (too coarse to show that the 8s are weak).
+
+**Tests**: `tests/facts.test.js` checks the spellings, that both orders of a fact that commutes give one id, and that all 477 facts have different ids within the contract's 100 characters. Checked in Chromium (`?compass_parts=multiplication,division&mode=mixed`): each of the 20 answers in the two `part` reports has its `id` and `skill` (`7 × 3` is `3x7`, `multiply:7`; `16 ÷ 2` is `16/2`, `divide:2`). No page errors.
+
 ## Lessons Learned
 
 ### 1. Simplicity is Hard
