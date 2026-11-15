@@ -1086,6 +1086,24 @@
                 return { kind: 'mastery', title: 'Math facts', subject: 'math', groups };
             }
 
+            // ---- Question ids and skills for Compass (Decision 33) ----
+            // Each answer in a `part` report names its fact (`id`) and what it
+            // practises (`skill`), app contract 1.7 section 2.5. 7 × 8 and
+            // 8 × 7 are one fact here, so they share one id, smaller number
+            // first. The skill is the operation and its table: the larger
+            // number for addition and multiplication, the number taken away
+            // or divided by for the other two. Compass keeps these with every
+            // answer, so never respell one once it has been sent.
+            const ID_SIGNS = { addition: '+', subtraction: '-', multiplication: 'x', division: '/' };
+            const SKILL_NAMES = { addition: 'add', subtraction: 'subtract', multiplication: 'multiply', division: 'divide' };
+            function questionId(op, num1, num2) {
+                const [a, b] = COMMUTES[op] ? [Math.min(num1, num2), Math.max(num1, num2)] : [num1, num2];
+                return `${a}${ID_SIGNS[op]}${b}`;
+            }
+            function questionSkill(op, num1, num2) {
+                return `${SKILL_NAMES[op]}:${COMMUTES[op] ? Math.max(num1, num2) : num2}`;
+            }
+
             // ---- Choosing the problems ----
             function shuffle(list, rand) {
                 for (let i = list.length - 1; i > 0; i--) {
@@ -1277,6 +1295,7 @@
             return {
                 OPS, UNSEEN, LEARNING, FLUENT, MASTERED, INTERVALS, CHECKIN_DAYS, SESSION, CHECKIN, TABLE,
                 create, encode, decode, fluentLimit, isFluent, recordAnswer, counts, masteryReport,
+                questionId, questionSkill,
                 planSession, planCheckin, isGraduated, todayKind, ready, finishPart, dueDays, isoDay, localDay
             };
         })();
@@ -1348,7 +1367,7 @@
         // one. On alternate days the operations are interleaved in one set
         // (`runMode` below).
         // The practice rules themselves live in AutomathCore, above.
-        const APP_VERSION = '1.20.0';
+        const APP_VERSION = '1.21.0';
         const OPERATIONS = ['addition', 'subtraction', 'multiplication', 'division'];
         const OPERATION_NAMES = { addition: 'Addition', subtraction: 'Subtraction', multiplication: 'Multiplication', division: 'Division' };
         const FEEDBACK_MS = 400;     // a right answer: its number and a tick, then the next problem
@@ -2275,6 +2294,8 @@
                 fluentMs: AutomathFacts.fluentLimit(record),
                 seconds: part.seconds,
                 items: part.history.map(item => ({
+                    id: AutomathFacts.questionId(part.part, item.num1, item.num2),
+                    skill: AutomathFacts.questionSkill(part.part, item.num1, item.num2),
                     prompt: `${item.num1} ${item.operator} ${item.num2}`,
                     answer: item.userAnswer,
                     correctAnswer: item.correctAnswer,

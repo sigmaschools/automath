@@ -254,3 +254,33 @@ test('the mastery report lists every fact with its stage, by operation, families
     assert.deepEqual(div, [...div].sort((a, b) => a - b));
     assert.ok(JSON.stringify(r).length < 30000, 'small enough for every session');
 });
+
+test('each answer carries a stable question id and skill for Compass (Decision 33)', () => {
+    // One spelling per fact: 7 × 8 and 8 × 7 are one fact here, so one id.
+    assert.equal(F.questionId('multiplication', 7, 8), '7x8');
+    assert.equal(F.questionId('multiplication', 8, 7), '7x8');
+    assert.equal(F.questionId('addition', 9, 4), '4+9');
+    assert.equal(F.questionId('subtraction', 13, 6), '13-6');
+    assert.equal(F.questionId('division', 56, 8), '56/8');
+    // The skill is the operation and its table: the larger number for the
+    // two that commute, the number taken away or divided by for the others.
+    assert.equal(F.questionSkill('multiplication', 7, 8), 'multiply:8');
+    assert.equal(F.questionSkill('multiplication', 8, 7), 'multiply:8');
+    assert.equal(F.questionSkill('addition', 7, 3), 'add:7');
+    assert.equal(F.questionSkill('subtraction', 13, 6), 'subtract:6');
+    assert.equal(F.questionSkill('division', 56, 8), 'divide:8');
+    assert.equal(F.questionSkill('multiplication', 0, 5), 'multiply:5');
+    // Every fact has its own id, in plain characters, within the contract's limit.
+    const ids = [];
+    for (const op of F.OPS) {
+        for (const f of F.TABLE[op]) {
+            const id = F.questionId(op, f.num1, f.num2);
+            const skill = F.questionSkill(op, f.num1, f.num2);
+            assert.match(id, /^\d+[+\-x/]\d+$/);
+            assert.match(skill, /^(add|subtract|multiply|divide):\d+$/);
+            assert.ok(id.length <= 100 && skill.length <= 100);
+            ids.push(id);
+        }
+    }
+    assert.equal(new Set(ids).size, 477, 'each fact once');
+});
